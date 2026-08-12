@@ -64,8 +64,10 @@ export default function App() {
       if (!nextSettings.steamConfigured && (epic.games ?? []).length === 0) {
         setView('settings');
       }
+      return nextSettings;
     } catch (err) {
       setError(String(err));
+      return null;
     } finally {
       setLoading(false);
     }
@@ -129,11 +131,23 @@ export default function App() {
     setError(null);
     try {
       setSteamGames(await api.refreshSteamLibrary());
+      // Installed matches are derived from what's in the library, so they have to be
+      // recomputed once new games land — otherwise nothing shows as installed.
+      setInstalled(await api.getInstalled().catch(() => ({})));
       enrichRequested.current = false;
     } catch (err) {
       setError(String(err));
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  // After saving credentials for the first time there's nothing in the library yet, so
+  // fetch straight away rather than leaving the user on an empty grid.
+  async function handleSettingsSaved() {
+    const next = await loadAll();
+    if (next?.steamConfigured) {
+      await handleRefreshSteam();
     }
   }
 
@@ -232,7 +246,7 @@ export default function App() {
                 steamId={settings.steamId}
                 steamConfigured={settings.steamConfigured}
                 igdbConfigured={settings.igdbConfigured}
-                onSaved={loadAll}
+                onSaved={handleSettingsSaved}
               />
 
               <SteamFamilyImport count={familyGames.length} />
