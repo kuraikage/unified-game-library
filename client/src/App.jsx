@@ -11,6 +11,7 @@ import FilterBar from './components/FilterBar';
 import GameGrid from './components/GameGrid';
 import GameList from './components/GameList';
 import SegmentedControl from './components/SegmentedControl';
+import StatusStrip from './components/StatusStrip';
 import { LibraryIcon, SettingsIcon } from './icons';
 
 const EMPTY_JOB = { running: false, total: 0, completed: 0, error: null };
@@ -324,11 +325,14 @@ export default function App() {
                 count={games.length}
                 onExport={handleExportCsv}
               />
-              {metadataJob.running && (
-                <p className="hint">
-                  Fetching genres &amp; art... {metadataJob.completed}/{metadataJob.total}
-                </p>
-              )}
+              <StatusStrip
+                refreshing={refreshing}
+                job={metadataJob}
+                missingCount={missingMetadataCount}
+                igdbConfigured={settings.igdbConfigured}
+                onEnrich={handleEnrichNow}
+                onDismissError={() => setMetadataJob({ ...metadataJob, error: null })}
+              />
               {viewMode === 'grid' ? (
                 <GameGrid
                   key="grid"

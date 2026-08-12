@@ -547,6 +547,92 @@ hr {
   white-space: nowrap;
 }
 
+/* ---------- library status strip ---------- */
+
+.status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.6rem 0.9rem;
+  margin-bottom: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 0.85rem;
+  animation: rise-in 0.35s var(--ease) both;
+}
+
+.status-strip.has-error {
+  border-color: color-mix(in srgb, #ff6b6b 45%, var(--line));
+}
+
+.status-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.status-item.grow {
+  flex: 1;
+  min-width: 240px;
+}
+
+.status-item.error {
+  color: #ff6b6b;
+}
+
+.progress {
+  flex: 1;
+  min-width: 80px;
+  max-width: 320px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--surface-hi);
+  overflow: hidden;
+}
+
+.progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent-grad);
+  transition: width 0.4s var(--ease);
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent-2);
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Text-style button for inline actions inside the strip. */
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-2);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+  opacity: 0.8;
+}
+
 /* ---------- grid ---------- */
 
 .game-grid {
