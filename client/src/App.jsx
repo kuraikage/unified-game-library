@@ -142,6 +142,18 @@ export default function App() {
     }
   }
 
+  // Manual trigger for the metadata pass. Clears the "already asked" latch so the
+  // automatic effect can also retry after a failure.
+  async function handleEnrichNow() {
+    setError(null);
+    enrichRequested.current = false;
+    try {
+      setMetadataJob(await api.enrichMetadata(allGames.map((g) => g.title)));
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
   // After saving credentials for the first time there's nothing in the library yet, so
   // fetch straight away rather than leaving the user on an empty grid.
   async function handleSettingsSaved() {
@@ -270,14 +282,26 @@ export default function App() {
                   <button type="button" onClick={handleRefreshSteam} disabled={refreshing}>
                     {refreshing ? 'Refreshing Steam...' : 'Refresh Steam'}
                   </button>
+                  {/* Escape hatch: enrichment normally starts on its own, but if it stalls
+                      or errored there needs to be a way to kick it off by hand. */}
+                  {settings.igdbConfigured && missingMetadataCount > 0 && (
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={handleEnrichNow}
+                      disabled={metadataJob.running}
+                    >
+                      {metadataJob.running ? 'Fetching...' : `Fetch genres & art (${missingMetadataCount})`}
+                    </button>
+                  )}
                 </div>
                 <p className="hint">
                   {!settings.igdbConfigured
                     ? 'Add IGDB credentials above to fetch genres, tags and artwork.'
                     : metadataJob.running
-                      ? `Fetching genres & art... ${metadataJob.completed}/${metadataJob.total}`
+                      ? `Looking up genres, tags and artwork on IGDB — ${metadataJob.completed} of ${metadataJob.total} done. This runs in the background; you can keep using the app.`
                       : missingMetadataCount > 0
-                        ? `${missingMetadataCount} games waiting on genre/art lookup.`
+                        ? `${missingMetadataCount} games have no genres, tags or artwork yet. This normally starts on its own — if it hasn't, use the button above.`
                         : 'Genres and artwork are up to date. New games are fetched automatically.'}
                 </p>
                 {metadataJob.error && <p className="error">{metadataJob.error}</p>}
