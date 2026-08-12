@@ -1,0 +1,920 @@
+:root {
+  --accent-1: #4aa3ff;
+  --accent-2: #a855f7;
+  --accent: #7c6cf7;
+  --accent-grad: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  --surface: rgba(127, 127, 127, 0.08);
+  --surface-hi: rgba(127, 127, 127, 0.14);
+  --line: rgba(127, 127, 127, 0.22);
+  --installed: #22c55e;
+
+  /* easeOutQuint — decelerates hard, which is what makes motion feel "fluid" */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 0.32s;
+  --dur-fast: 0.18s;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* ---------- shell ---------- */
+
+.app {
+  /* Desktop window: use the space available rather than a web-style narrow column,
+     but stop short of absurdly long rows on ultrawide displays. */
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  animation: app-in 0.5s var(--ease) both;
+}
+
+@keyframes app-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.app-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.app-header h1 {
+  font-size: 2rem;
+  margin: 0;
+  letter-spacing: -0.03em;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-icon {
+  width: 84px;
+  height: 84px;
+  border-radius: 18px;
+  flex-shrink: 0;
+  transition: transform var(--dur) var(--ease);
+}
+
+.brand-icon:hover {
+  transform: scale(1.05) rotate(-2deg);
+}
+
+.brand .tagline {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.6;
+}
+
+.app-header nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ---------- controls ---------- */
+
+button {
+  position: relative;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: var(--accent-grad);
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease),
+    background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    opacity var(--dur-fast) var(--ease);
+}
+
+button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 0.06s;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button.secondary {
+  background: transparent;
+  color: inherit;
+  border-color: var(--line);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: var(--surface-hi);
+  box-shadow: none;
+}
+
+/* ---------- segmented capsule ---------- */
+
+.segmented {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.3rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(8px);
+}
+
+.segmented-indicator {
+  position: absolute;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  left: 0;
+  border-radius: 999px;
+  background: var(--accent-grad);
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 75%, transparent);
+  /* transform+width only — cheap to animate, and the spring-ish ease sells the "flow" */
+  transition:
+    transform 0.45s var(--ease),
+    width 0.45s var(--ease),
+    opacity 0.2s var(--ease-soft);
+  pointer-events: none;
+}
+
+.segmented-option {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.95rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.65;
+  white-space: nowrap;
+  transition:
+    color var(--dur) var(--ease),
+    opacity var(--dur) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.segmented-option:hover:not([data-active='true']) {
+  opacity: 1;
+  transform: none;
+  box-shadow: none;
+}
+
+.segmented-option[data-active='true'] {
+  color: #fff;
+  opacity: 1;
+}
+
+.segmented-option:active:not([data-active='true']) {
+  transform: scale(0.95);
+}
+
+.segmented-option svg {
+  flex-shrink: 0;
+}
+
+.segmented-lg .segmented-option {
+  padding: 0.55rem 1.15rem;
+  font-size: 0.95rem;
+}
+
+/* Standalone capsule button that sits beside a segmented group. */
+.pill-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.05rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: inherit;
+}
+
+.pill-button:hover:not(:disabled) {
+  background: var(--surface-hi);
+  box-shadow: none;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+
+input,
+textarea {
+  padding: 0.55rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.15);
+  color: inherit;
+  font-family: inherit;
+  transition:
+    border-color var(--dur-fast) var(--ease-soft),
+    box-shadow var(--dur-fast) var(--ease-soft),
+    background-color var(--dur-fast) var(--ease-soft);
+}
+
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+/* ---------- panels ---------- */
+
+.panel {
+  max-width: 560px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 1.5rem;
+  transition:
+    border-color var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+.panel:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+}
+
+.panel h2 {
+  margin-top: 0;
+}
+
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings-stack > * {
+  animation: rise-in 0.45s var(--ease) both;
+}
+
+.settings-stack > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.settings-stack > *:nth-child(3) {
+  animation-delay: 0.12s;
+}
+.settings-stack > *:nth-child(4) {
+  animation-delay: 0.18s;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.steps {
+  padding-left: 1.2rem;
+  line-height: 1.7;
+}
+
+.snippet {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.8rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  max-height: 260px;
+  overflow: auto;
+}
+
+details > summary {
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease);
+}
+
+details > summary:hover {
+  color: var(--accent-2);
+}
+
+.bookmarklet {
+  display: inline-block;
+  padding: 0.4rem 0.9rem;
+  border-radius: 8px;
+  background: var(--accent-grad);
+  color: white;
+  text-decoration: none;
+  font-size: 0.85rem;
+  cursor: grab;
+  user-select: none;
+  transition:
+    transform var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease);
+}
+
+.bookmarklet:hover {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.bookmarklet:active {
+  cursor: grabbing;
+}
+
+.error {
+  color: #ff6b6b;
+  animation: shake 0.4s var(--ease-soft);
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+.imported-note {
+  opacity: 0.75;
+  margin-bottom: 1rem;
+}
+
+.hint,
+.muted {
+  opacity: 0.65;
+  font-size: 0.85rem;
+}
+
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.status-dot::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.status-dot.ok {
+  color: #4ade80;
+}
+
+.status-dot.off {
+  color: #9ca3af;
+}
+
+hr {
+  width: 100%;
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 0.25rem 0;
+}
+
+.empty,
+.loading {
+  opacity: 0.7;
+}
+
+.loading {
+  animation: pulse 1.4s var(--ease-soft) infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---------- filter bar ---------- */
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  animation: rise-in 0.45s var(--ease) both;
+}
+
+/* Segmented groups size to their content, so they must be allowed to wrap onto a new
+   row rather than overflow when the window is narrow. */
+.filter-bar > .segmented,
+.filter-bar > .pill-button {
+  flex: 0 0 auto;
+}
+
+.count {
+  margin-left: auto;
+}
+
+.search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  /* Takes the leftover space but is allowed to shrink, so the controls to its right
+     stay on screen instead of being pushed past the edge. */
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 0.95rem;
+  display: flex;
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.search-wrap:focus-within .search-icon {
+  opacity: 1;
+  color: var(--accent-2);
+}
+
+.filter-bar .search {
+  width: 100%;
+  padding: 0.6rem 2.2rem 0.6rem 2.5rem;
+  border-radius: 999px;
+}
+
+.search-clear {
+  position: absolute;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border-radius: 999px;
+  border: none;
+  background: var(--surface-hi);
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  opacity: 0.7;
+  animation: pop-in 0.2s var(--ease);
+}
+
+.search-clear:hover {
+  opacity: 1;
+  box-shadow: none;
+  transform: none;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.count {
+  opacity: 0.7;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ---------- grid ---------- */
+
+.game-grid {
+  display: grid;
+  /* ~14% wider than before, which also gives the cover enough height that the corner
+     chips clear the centred Play button. */
+  grid-template-columns: repeat(auto-fill, minmax(194px, 1fr));
+  gap: 1.1rem;
+}
+
+.game-card {
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid transparent;
+  transition:
+    transform var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+/* Only the first rows animate in — running this on a 700-card library would thrash. */
+.game-grid .game-card:nth-child(-n + 24) {
+  animation: card-in 0.5s var(--ease) both;
+  animation-delay: calc(var(--i, 0) * 18ms);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+}
+
+.game-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 14px 30px -12px rgba(0, 0, 0, 0.55);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.cover {
+  position: relative;
+  aspect-ratio: 460 / 215;
+  background: #1c1c22;
+  overflow: hidden;
+}
+
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.55s var(--ease);
+}
+
+.game-card:hover .cover img {
+  transform: scale(1.08);
+}
+
+.cover-fallback {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  color: #888;
+  background: linear-gradient(135deg, rgba(74, 163, 255, 0.12), rgba(168, 85, 247, 0.12));
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.18rem 0.45rem;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  color: white;
+  white-space: nowrap;
+}
+
+/* Only the grid card overlays its badge on top of the cover art.
+   z-index keeps it above the hover overlay instead of disappearing behind it. */
+.cover .badge {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  z-index: 2;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+}
+
+.game-card:hover .cover .badge {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.badge-steam {
+  border: 1px solid #66c0f4;
+}
+
+.badge-epic {
+  border: 1px solid #ffffff;
+}
+
+/* Family-shared games extend the platform chip rather than adding a second badge,
+   so all provenance sits in one place. */
+.badge-shared {
+  border-color: #fbbf24;
+  color: #fde68a;
+}
+
+.badge-sep {
+  margin-left: 0.25rem;
+  opacity: 0.85;
+}
+
+/* In the list view the chips sit inline beside their column's value. */
+.platform-cell,
+.title-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+/* Installed state reads as a chip alongside the platform tag, so both are labelled
+   the same way rather than one being a symbol you have to learn. */
+.badge-installed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--installed);
+  color: #bbf7d0;
+}
+
+/* Subtle green halo as a second, at-a-glance cue alongside the chip. */
+.game-card.is-installed {
+  border-color: color-mix(in srgb, var(--installed) 30%, transparent);
+  box-shadow: 0 0 14px -4px color-mix(in srgb, var(--installed) 45%, transparent);
+}
+
+.game-card.is-installed:hover {
+  border-color: color-mix(in srgb, var(--installed) 55%, transparent);
+  box-shadow:
+    0 0 18px -3px color-mix(in srgb, var(--installed) 60%, transparent),
+    0 14px 30px -12px rgba(0, 0, 0, 0.55);
+}
+
+.badge-installed svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* Top-LEFT, opposite the platform tag: the Play/Install button is centred on the cover,
+   so anything stacked below the platform tag would sit right on top of it. Stays visible
+   rather than hover-only, so the installed set is scannable across the whole grid. */
+.cover .badge-installed {
+  position: absolute;
+  top: 0.45rem;
+  left: 0.45rem;
+  right: auto;
+  z-index: 2;
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- play / install actions ---------- */
+
+.cover-actions {
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* below the badges, above the artwork */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(8, 8, 12, 0.55);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease);
+}
+
+.game-card:hover .cover-actions,
+.game-card:focus-within .cover-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 0.85rem;
+  transform: translateY(6px);
+  transition:
+    transform var(--dur) var(--ease),
+    background-color var(--dur-fast) var(--ease);
+}
+
+.game-card:hover .action-btn {
+  transform: translateY(0);
+}
+
+.action-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+  box-shadow: none;
+}
+
+.action-btn.play {
+  background: #22c55e;
+  border-color: #22c55e;
+  color: #06240f;
+}
+
+.action-btn.play:hover:not(:disabled) {
+  background: #16a34a;
+}
+
+.action-btn.compact {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.75rem;
+  transform: none;
+  background: var(--surface-hi);
+  border-color: var(--line);
+  color: inherit;
+}
+
+.action-btn.compact.play {
+  background: color-mix(in srgb, #22c55e 22%, transparent);
+  border-color: color-mix(in srgb, #22c55e 55%, transparent);
+  color: inherit;
+}
+
+.pill-button.active {
+  background: var(--accent-grad);
+  border-color: transparent;
+  color: #fff;
+}
+
+.notice {
+  color: #4ade80;
+  animation: pop-in 0.25s var(--ease);
+}
+
+.game-info {
+  padding: 0.6rem 0.7rem;
+}
+
+.title {
+  margin: 0;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playtime {
+  margin: 0.2rem 0 0;
+  font-size: 0.75rem;
+  opacity: 0.65;
+}
+
+/* ---------- list ---------- */
+
+.game-list {
+  overflow-x: auto;
+  animation: rise-in 0.45s var(--ease) both;
+}
+
+.game-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.game-list th {
+  text-align: left;
+  padding: 0.6rem;
+  opacity: 0.7;
+  font-weight: 500;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  backdrop-filter: blur(8px);
+}
+
+.game-list td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid rgba(127, 127, 127, 0.13);
+  vertical-align: middle;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.game-list tbody tr {
+  transition: background-color var(--dur-fast) var(--ease);
+}
+
+.game-list tbody tr:hover {
+  background: var(--surface-hi);
+}
+
+.list-cover img,
+.list-cover .cover-fallback {
+  width: 42px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 6px;
+  display: block;
+  transition: transform var(--dur) var(--ease);
+}
+
+.game-list tbody tr:hover .list-cover img {
+  transform: scale(1.12);
+}
+
+.cover-fallback.small {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #888;
+  font-size: 1rem;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 260px;
+}
+
+.pill {
+  font-size: 0.7rem;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  white-space: nowrap;
+  transition:
+    background-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease);
+}
+
+.pill:hover {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+  transform: translateY(-1px);
+}
+
+/* ---------- accessibility ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

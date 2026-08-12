@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Minimum permissions for the main window. The frontend deliberately gets no opener/shell/fs permissions of its own — every URL it can cause to be opened is built and validated in Rust (see launcher.rs), so a compromised webview cannot open arbitrary targets.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

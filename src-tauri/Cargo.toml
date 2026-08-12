@@ -1,0 +1,53 @@
+[package]
+name = "ugly"
+version = "1.0.0"
+description = "Unified Game Library - all your games, one place"
+authors = ["UGLy"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.11.3", features = [] }
+tauri-plugin-log = "2"
+tauri-plugin-opener = "2"
+
+# HTTP client for Steam / IGDB / Twitch. rustls avoids depending on the system OpenSSL.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { version = "1", features = ["full"] }
+
+# Local library + metadata cache. Bundled so users need no SQLite install.
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# Credentials live in the Windows Credential Manager, never in the webview.
+keyring = { version = "3", features = ["windows-native"] }
+
+# Small local HTTP listener that receives the Epic bookmarklet POST.
+axum = { version = "0.7", features = ["form"] }
+tower-http = { version = "0.6", features = ["cors"] }
+
+anyhow = "1"
+thiserror = "2"
+urlencoding = "2"
+
+# Locating the Steam install (HKCU\Software\Valve\Steam\SteamPath) and opening
+# protocol URLs without going through cmd.exe.
+[target.'cfg(windows)'.dependencies]
+winreg = "0.52"
+windows = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+  "Win32_System_Diagnostics_ToolHelp",
+] }

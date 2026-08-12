@@ -1,0 +1,14 @@
+{
+  "name": "ugly",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "install:all": "npm install --prefix client",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4"
+  }
+}
