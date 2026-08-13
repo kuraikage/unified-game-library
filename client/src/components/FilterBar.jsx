@@ -40,6 +40,15 @@ export default function FilterBar({
           )}
         </div>
         <span className="count">{count} games</span>
+        <SegmentedControl
+          ariaLabel="View mode"
+          value={viewMode}
+          onChange={onViewModeChange}
+          options={[
+            { value: 'grid', label: 'Grid', icon: <GridIcon /> },
+            { value: 'list', label: 'List', icon: <ListIcon /> },
+          ]}
+        />
         <button
           type="button"
           className="pill-button"
@@ -61,16 +70,6 @@ export default function FilterBar({
           { value: 'all', label: 'All' },
           { value: 'steam', label: 'Steam' },
           { value: 'epic', label: 'Epic' },
-        ]}
-      />
-
-      <SegmentedControl
-        ariaLabel="View mode"
-        value={viewMode}
-        onChange={onViewModeChange}
-        options={[
-          { value: 'grid', label: 'Grid', icon: <GridIcon /> },
-          { value: 'list', label: 'List', icon: <ListIcon /> },
         ]}
       />
 
