@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { DriveIcon, InstallIcon, PlayIcon } from '../icons';
 import { statusMeta } from '../gameStatus';
-import StatusButtons from './StatusButtons';
+import StatusButtons, { blurIfPointerClick } from './StatusButtons';
 import CoverImage from './CoverImage';
 
 function formatPlaytime(minutes) {
@@ -35,24 +35,31 @@ function GameCard({
         {/* Persistent information, gathered into one strip along the bottom instead of
             scattered across corners. The scrim keeps it legible over any artwork. */}
         <div className="cover-meta">
-          <span
-            className={`badge badge-${game.platform}${game.shared ? ' badge-shared' : ''}`}
-            title={game.shared ? 'Shared with you via Steam Family' : game.platform}
-          >
-            {game.platform}
-            {game.shared && <span className="badge-sep">· family</span>}
-          </span>
-          <span className="cover-meta-icons">
-            {installed && (
-              <span className="badge badge-icon badge-installed" title="Installed on this PC">
-                <DriveIcon />
-              </span>
-            )}
-            {meta && (
-              <span className={`badge badge-icon badge-status is-${status}`} title={meta.label}>
-                <meta.Icon />
-              </span>
-            )}
+          {/* Status reads as a word — the icon alone wasn't clear enough. Installed
+              stays an icon since it's a simple yes/no and the label repeats the filter. */}
+          {(meta || installed) && (
+            <span className="cover-meta-row">
+              {meta && (
+                <span className={`badge badge-status is-${status}`} title={meta.label}>
+                  <meta.Icon />
+                  {meta.short}
+                </span>
+              )}
+              {installed && (
+                <span className="badge badge-icon badge-installed" title="Installed on this PC">
+                  <DriveIcon />
+                </span>
+              )}
+            </span>
+          )}
+          <span className="cover-meta-row">
+            <span
+              className={`badge badge-${game.platform}${game.shared ? ' badge-shared' : ''}`}
+              title={game.shared ? 'Shared with you via Steam Family' : game.platform}
+            >
+              {game.platform}
+              {game.shared && <span className="badge-sep">· family</span>}
+            </span>
           </span>
         </div>
 
@@ -60,13 +67,27 @@ function GameCard({
             than things you need to see while scanning. */}
         <div className="cover-actions">
           {installed ? (
-            <button type="button" className="action-btn play" onClick={() => onLaunch(game)}>
+            <button
+              type="button"
+              className="action-btn play"
+              onClick={(e) => {
+                blurIfPointerClick(e);
+                onLaunch(game);
+              }}
+            >
               <PlayIcon />
               <span>Play</span>
             </button>
           ) : (
             // Epic exposes no install action, so that button opens the launcher's store page.
-            <button type="button" className="action-btn" onClick={() => onInstall(game)}>
+            <button
+              type="button"
+              className="action-btn"
+              onClick={(e) => {
+                blurIfPointerClick(e);
+                onInstall(game);
+              }}
+            >
               <InstallIcon />
               <span>{game.platform === 'epic' ? 'Store' : 'Install'}</span>
             </button>

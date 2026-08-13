@@ -780,19 +780,23 @@ hr {
   bottom: 0;
   left: 0;
   z-index: 2;
+  /* Stacked rows: a status word plus the platform chip won't fit on one line at
+     these card widths, so each gets its own line rather than being truncated. */
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 0.35rem;
-  padding: 1.6rem 0.45rem 0.45rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  padding: 1.8rem 0.45rem 0.45rem;
   /* Scrim so chips stay legible over bright artwork. */
   background: linear-gradient(to top, rgba(6, 6, 10, 0.92), rgba(6, 6, 10, 0));
   pointer-events: none;
 }
 
-.cover-meta-icons {
+.cover-meta-row {
   display: flex;
+  align-items: center;
   gap: 0.25rem;
+  max-width: 100%;
 }
 
 /* Compact square chip for icon-only indicators. */
@@ -917,20 +921,27 @@ hr {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.12);
+  /* Dark, slightly opaque base rather than a translucent white: over bright artwork
+     the old treatment washed out and the icons disappeared. */
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: rgba(10, 10, 14, 0.72);
   color: #fff;
-  opacity: 0.85;
+  opacity: 1;
+}
+
+.status-button svg {
+  width: 17px;
+  height: 17px;
 }
 
 .status-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(10, 10, 14, 0.9);
+  border-color: rgba(255, 255, 255, 0.8);
   box-shadow: none;
-  opacity: 1;
 }
 
 .status-button.active.is-playing {
@@ -997,6 +1008,10 @@ hr {
   transition: opacity var(--dur) var(--ease);
 }
 
+/* Keyboard focus must still reveal the actions. A mouse click also leaves the button
+   focused, which used to keep this stuck open after the pointer left — that's handled
+   by blurring on pointer clicks only (see StatusButtons), rather than by weakening
+   this selector, since :focus-visible isn't reliably matched in this webview. */
 .game-card:hover .cover-actions,
 .game-card:focus-within .cover-actions {
   opacity: 1;
