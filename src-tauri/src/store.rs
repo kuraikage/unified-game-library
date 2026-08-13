@@ -263,19 +263,26 @@ impl Store {
             "SELECT slug, matched_name, genres, tags, cover_url, not_found, fetched_at FROM game_metadata",
         )?;
         let mut map = serde_json::Map::new();
+        // Every column is read leniently. A single malformed row must not fail the whole
+        // read: this powers the entire library view, so one bad value would otherwise
+        // leave the user staring at an empty grid with no way to recover.
         let rows = stmt.query_map([], |row| {
             let slug: String = row.get(0)?;
-            let genres: String = row.get(2)?;
-            let tags: String = row.get(3)?;
+            let genres: Option<String> = row.get(2).unwrap_or_default();
+            let tags: Option<String> = row.get(3).unwrap_or_default();
             Ok((
                 slug,
                 MetadataEntry {
-                    matched_name: row.get(1)?,
-                    genres: serde_json::from_str(&genres).unwrap_or_default(),
-                    tags: serde_json::from_str(&tags).unwrap_or_default(),
-                    cover_url: row.get(4)?,
-                    not_found: row.get::<_, i32>(5)? != 0,
-                    fetched_at: row.get(6)?,
+                    matched_name: row.get(1).unwrap_or_default(),
+                    genres: genres
+                        .and_then(|g| serde_json::from_str(&g).ok())
+                        .unwrap_or_default(),
+                    tags: tags
+                        .and_then(|t| serde_json::from_str(&t).ok())
+                        .unwrap_or_default(),
+                    cover_url: row.get(4).unwrap_or_default(),
+                    not_found: row.get::<_, i32>(5).unwrap_or(0) != 0,
+                    fetched_at: row.get(6).unwrap_or(0),
                 },
             ))
         })?;

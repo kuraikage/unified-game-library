@@ -1,5 +1,6 @@
 import GameCard from './GameCard';
 import { slugify } from '../slugify';
+import { coverSources } from '../covers';
 
 // Only the first rows get a staggered entrance — see the matching cap in App.css.
 const STAGGER_LIMIT = 24;
@@ -19,19 +20,22 @@ export default function GameGrid({
 
   return (
     <div className="game-grid">
-      {games.map((game, index) => (
-        <GameCard
-          key={game.id}
-          game={game}
-          coverUrl={game.coverUrl ?? metadata[slugify(game.title)]?.coverUrl ?? null}
-          index={index < STAGGER_LIMIT ? index : undefined}
-          installed={Boolean(installed[game.id])}
-          status={statuses[slugify(game.title)]?.status ?? null}
-          onLaunch={onLaunch}
-          onInstall={onInstall}
-          onStatusChange={onStatusChange}
-        />
-      ))}
+      {games.map((game, index) => {
+        const slug = slugify(game.title);
+        return (
+          <GameCard
+            key={game.id}
+            game={game}
+            coverSources={coverSources(game, metadata[slug])}
+            index={index < STAGGER_LIMIT ? index : undefined}
+            installed={Boolean(installed[game.id])}
+            status={statuses[slug]?.status ?? null}
+            onLaunch={onLaunch}
+            onInstall={onInstall}
+            onStatusChange={onStatusChange}
+          />
+        );
+      })}
     </div>
   );
 }

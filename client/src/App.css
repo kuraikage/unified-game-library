@@ -685,9 +685,8 @@ hr {
 
 .game-grid {
   display: grid;
-  /* ~14% wider than before, which also gives the cover enough height that the corner
-     chips clear the centred Play button. */
-  grid-template-columns: repeat(auto-fill, minmax(194px, 1fr));
+  /* Portrait covers are tall, so narrower columns keep a sensible card height. */
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 1.1rem;
 }
 
@@ -704,7 +703,8 @@ hr {
      900+ game library this is the difference between a snappy filter switch and a
      visible stall. contain-intrinsic-size keeps the scrollbar stable meanwhile. */
   content-visibility: auto;
-  contain-intrinsic-size: auto 210px;
+  /* Roughly a portrait cover plus the title block. */
+  contain-intrinsic-size: auto 350px;
 }
 
 /* Only the first rows animate in — running this on a 700-card library would thrash. */
@@ -728,7 +728,9 @@ hr {
 
 .cover {
   position: relative;
-  aspect-ratio: 460 / 215;
+  /* Portrait, matching Steam's library art and IGDB covers. The old landscape frame
+     cropped IGDB's portrait covers badly and left no room for overlays. */
+  aspect-ratio: 2 / 3;
   background: #1c1c22;
   overflow: hidden;
 }
@@ -770,23 +772,41 @@ hr {
   white-space: nowrap;
 }
 
-/* Only the grid card overlays its badge on top of the cover art.
-   z-index keeps it above the hover overlay instead of disappearing behind it. */
-.cover .badge {
+/* Persistent info strip along the bottom of the cover. Grouping the chips in one
+   place reads as designed, where three scattered corners read as clutter. */
+.cover-meta {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 2;
-  opacity: 0;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--dur) var(--ease),
-    transform var(--dur) var(--ease);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 1.6rem 0.45rem 0.45rem;
+  /* Scrim so chips stay legible over bright artwork. */
+  background: linear-gradient(to top, rgba(6, 6, 10, 0.92), rgba(6, 6, 10, 0));
+  pointer-events: none;
 }
 
-.game-card:hover .cover .badge {
-  opacity: 1;
-  transform: translateY(0);
+.cover-meta-icons {
+  display: flex;
+  gap: 0.25rem;
+}
+
+/* Compact square chip for icon-only indicators. */
+.badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.22rem;
+  line-height: 0;
+}
+
+.badge-icon svg {
+  width: 12px;
+  height: 12px;
 }
 
 .badge-steam {
@@ -846,18 +866,6 @@ hr {
   height: 11px;
 }
 
-/* Top-LEFT, opposite the platform tag: the Play/Install button is centred on the cover,
-   so anything stacked below the platform tag would sit right on top of it. Stays visible
-   rather than hover-only, so the installed set is scannable across the whole grid. */
-.cover .badge-installed {
-  position: absolute;
-  top: 0.45rem;
-  left: 0.45rem;
-  right: auto;
-  z-index: 2;
-  opacity: 1;
-  transform: none;
-}
 
 /* ---------- play status ---------- */
 
@@ -885,18 +893,6 @@ hr {
 .badge-status.is-dropped {
   border: 1px solid var(--status-dropped);
   color: #d6d3d1;
-}
-
-/* Sits bottom-left of the cover, clear of the platform and installed chips. */
-.cover .badge-status {
-  position: absolute;
-  top: auto;
-  right: auto;
-  bottom: 0.45rem;
-  left: 0.45rem;
-  z-index: 2;
-  opacity: 1;
-  transform: none;
 }
 
 /* Completed games recede slightly so the backlog stands out when browsing. */
