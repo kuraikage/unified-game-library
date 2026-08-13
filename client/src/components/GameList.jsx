@@ -1,5 +1,7 @@
 import { slugify } from '../slugify';
 import { DriveIcon, InstallIcon, PlayIcon } from '../icons';
+import { statusMeta } from '../gameStatus';
+import StatusButtons from './StatusButtons';
 
 function formatPlaytime(minutes) {
   if (minutes === null || minutes === undefined) return '—';
@@ -21,7 +23,15 @@ function Pills({ items }) {
   );
 }
 
-export default function GameList({ games, metadata, installed = {}, onLaunch, onInstall }) {
+export default function GameList({
+  games,
+  metadata,
+  installed = {},
+  statuses = {},
+  onLaunch,
+  onInstall,
+  onStatusChange,
+}) {
   if (games.length === 0) {
     return <p className="empty">No games match your filters yet.</p>;
   }
@@ -37,14 +47,18 @@ export default function GameList({ games, metadata, installed = {}, onLaunch, on
             <th>Playtime</th>
             <th>Genres</th>
             <th>Tags</th>
+            <th>Status</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           {games.map((game) => {
-            const entry = metadata[slugify(game.title)];
+            const slug = slugify(game.title);
+            const entry = metadata[slug];
             const cover = game.coverUrl ?? entry?.coverUrl ?? null;
             const isInstalled = Boolean(installed[game.id]);
+            const status = statuses[slug]?.status ?? null;
+            const meta = statusMeta(status);
             return (
               <tr key={game.id}>
                 <td className="list-cover">
@@ -82,6 +96,21 @@ export default function GameList({ games, metadata, installed = {}, onLaunch, on
                 </td>
                 <td>
                   <Pills items={entry?.tags} />
+                </td>
+                <td>
+                  <span className="status-cell">
+                    {meta && (
+                      <span className={`badge badge-status is-${status}`}>
+                        <meta.Icon />
+                        {meta.short}
+                      </span>
+                    )}
+                    <StatusButtons
+                      value={status}
+                      size="sm"
+                      onChange={(next) => onStatusChange(game, next)}
+                    />
+                  </span>
                 </td>
                 <td>
                   <button

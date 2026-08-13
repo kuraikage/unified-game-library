@@ -7,6 +7,9 @@
   --surface-hi: rgba(127, 127, 127, 0.14);
   --line: rgba(127, 127, 127, 0.22);
   --installed: #22c55e;
+  --status-playing: #38bdf8;
+  --status-completed: #a78bfa;
+  --status-dropped: #a8a29e;
 
   /* easeOutQuint — decelerates hard, which is what makes motion feel "fluid" */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -844,6 +847,131 @@ hr {
   transform: none;
 }
 
+/* ---------- play status ---------- */
+
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.badge-status svg {
+  width: 11px;
+  height: 11px;
+}
+
+.badge-status.is-playing {
+  border: 1px solid var(--status-playing);
+  color: #bfdbfe;
+}
+
+.badge-status.is-completed {
+  border: 1px solid var(--status-completed);
+  color: #ddd6fe;
+}
+
+.badge-status.is-dropped {
+  border: 1px solid var(--status-dropped);
+  color: #d6d3d1;
+}
+
+/* Sits bottom-left of the cover, clear of the platform and installed chips. */
+.cover .badge-status {
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: 0.45rem;
+  left: 0.45rem;
+  z-index: 2;
+  opacity: 1;
+  transform: none;
+}
+
+/* Completed games recede slightly so the backlog stands out when browsing. */
+.game-card.is-completed .cover img,
+.game-card.is-dropped .cover img {
+  opacity: 0.55;
+  filter: saturate(0.65);
+}
+
+.game-card.is-completed:hover .cover img,
+.game-card.is-dropped:hover .cover img {
+  opacity: 1;
+  filter: none;
+}
+
+.status-buttons {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.status-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  opacity: 0.85;
+}
+
+.status-button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.status-button.active.is-playing {
+  background: var(--status-playing);
+  border-color: var(--status-playing);
+  color: #06203f;
+}
+
+.status-button.active.is-completed {
+  background: var(--status-completed);
+  border-color: var(--status-completed);
+  color: #1e1b4b;
+}
+
+.status-button.active.is-dropped {
+  background: var(--status-dropped);
+  border-color: var(--status-dropped);
+  color: #1c1917;
+}
+
+/* Compact variant for list rows, which inherit the page colours rather than the
+   light-on-dark treatment used over cover art. */
+.status-buttons-sm .status-button {
+  width: 24px;
+  height: 24px;
+  border-color: var(--line);
+  background: var(--surface-hi);
+  color: inherit;
+}
+
+.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ---------- play / install actions ---------- */
 
 .cover-actions {
@@ -851,6 +979,8 @@ hr {
   inset: 0;
   z-index: 1; /* below the badges, above the artwork */
   display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
   align-items: center;
   justify-content: center;
   background: rgba(8, 8, 12, 0.55);

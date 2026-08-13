@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::models::{EpicLibrary, Game, MetadataEntry};
+use crate::models::{EpicLibrary, Game, GameStatus, MetadataEntry, StatusEntry};
 
 pub struct Store {
     conn: Mutex<Connection>,
@@ -45,6 +46,16 @@ impl Store {
                  cover_url    TEXT,
                  not_found    INTEGER NOT NULL DEFAULT 0,
                  fetched_at   INTEGER NOT NULL
+             );
+
+             -- Keyed by slug and intentionally NOT tied to the game tables: those are
+             -- emptied and rebuilt on every import, and progress must survive that.
+             -- Slug also means a game owned on two stores shares one status.
+             CREATE TABLE IF NOT EXISTS game_status (
+                 slug         TEXT PRIMARY KEY,
+                 status       TEXT NOT NULL,
+                 updated_at   INTEGER NOT NULL,
+                 completed_at INTEGER
              );
 
              CREATE TABLE IF NOT EXISTS app_state (
@@ -275,6 +286,65 @@ impl Store {
         Ok(map)
     }
 
+    // ---------- play status ----------
+
+    /// Passing `None` clears the status, returning the game to the implicit backlog.
+    pub fn set_status(&self, slug: &str, status: Option<GameStatus>, now: i64) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        let Some(status) = status else {
+            conn.execute("DELETE FROM game_status WHERE slug = ?1", [slug])?;
+            return Ok(());
+        };
+
+        let completed_at = (status == GameStatus::Completed).then_some(now);
+        conn.execute(
+            "INSERT INTO game_status (slug, status, updated_at, completed_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(slug) DO UPDATE SET
+                 status     = excluded.status,
+                 updated_at = excluded.updated_at,
+                 -- Keep the original completion date if it's still marked completed.
+                 completed_at = CASE
+                     WHEN excluded.status = 'completed'
+                     THEN COALESCE(game_status.completed_at, excluded.completed_at)
+                     ELSE NULL
+                 END",
+            params![slug, status.as_str(), now, completed_at],
+        )?;
+        Ok(())
+    }
+
+    pub fn all_statuses(&self) -> Result<HashMap<String, StatusEntry>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt =
+            conn.prepare("SELECT slug, status, updated_at, completed_at FROM game_status")?;
+        let mut out = HashMap::new();
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, Option<i64>>(3)?,
+            ))
+        })?;
+        for row in rows {
+            let (slug, status, updated_at, completed_at) = row?;
+            // A row written by a newer version with an unknown status is skipped rather
+            // than failing the whole read.
+            if let Some(status) = GameStatus::parse(&status) {
+                out.insert(
+                    slug,
+                    StatusEntry {
+                        status,
+                        updated_at,
+                        completed_at,
+                    },
+                );
+            }
+        }
+        Ok(out)
+    }
+
     pub fn known_metadata_slugs(&self) -> Result<std::collections::HashSet<String>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare("SELECT slug FROM game_metadata")?;
@@ -282,6 +352,50 @@ impl Store {
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<rusqlite::Result<std::collections::HashSet<_>>>()?;
         Ok(slugs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Store;
+    use crate::models::GameStatus;
+
+    fn temp_store() -> (Store, tempdir::TempDir) {
+        let dir = tempdir::TempDir::new("ugly-test").unwrap();
+        let store = Store::open(dir.path()).unwrap();
+        (store, dir)
+    }
+
+    #[test]
+    fn status_is_set_cleared_and_survives_library_rebuild() {
+        let (store, _dir) = temp_store();
+
+        store.set_status("hades", Some(GameStatus::Playing), 100).unwrap();
+        assert_eq!(store.all_statuses().unwrap()["hades"].status, GameStatus::Playing);
+
+        // Imports wipe and rebuild the game tables; progress must not go with them.
+        store.replace_steam_games(&[]).unwrap();
+        store.replace_epic_games(&[], 1).unwrap();
+        assert!(store.all_statuses().unwrap().contains_key("hades"));
+
+        store.set_status("hades", None, 300).unwrap();
+        assert!(store.all_statuses().unwrap().is_empty());
+    }
+
+    #[test]
+    fn completed_at_is_recorded_once_and_cleared_when_unset() {
+        let (store, _dir) = temp_store();
+
+        store.set_status("celeste", Some(GameStatus::Completed), 500).unwrap();
+        assert_eq!(store.all_statuses().unwrap()["celeste"].completed_at, Some(500));
+
+        // Re-marking completed keeps the original date rather than bumping it.
+        store.set_status("celeste", Some(GameStatus::Completed), 900).unwrap();
+        assert_eq!(store.all_statuses().unwrap()["celeste"].completed_at, Some(500));
+
+        // Moving away from completed drops the date.
+        store.set_status("celeste", Some(GameStatus::Playing), 950).unwrap();
+        assert_eq!(store.all_statuses().unwrap()["celeste"].completed_at, None);
     }
 }
 

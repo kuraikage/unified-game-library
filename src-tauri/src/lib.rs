@@ -97,6 +97,8 @@ pub fn run() {
             commands::get_metadata,
             commands::get_enrichment_job,
             commands::enrich_metadata,
+            commands::get_statuses,
+            commands::set_game_status,
             commands::get_installed,
             commands::launch_game,
             commands::install_game,

@@ -1,5 +1,6 @@
 import SegmentedControl from './SegmentedControl';
 import { DownloadIcon, DriveIcon, GridIcon, ListIcon, SearchIcon } from '../icons';
+import { STATUSES } from '../gameStatus';
 
 export default function FilterBar({
   search,
@@ -11,6 +12,8 @@ export default function FilterBar({
   installedOnly,
   onInstalledOnlyChange,
   installedCount,
+  statusFilter,
+  onStatusFilterChange,
   count,
   onExport,
 }) {
@@ -66,6 +69,17 @@ export default function FilterBar({
             label: `Installed${installedCount ? ` (${installedCount})` : ''}`,
             icon: <DriveIcon />,
           },
+        ]}
+      />
+
+      <SegmentedControl
+        ariaLabel="Filter by play status"
+        value={statusFilter}
+        onChange={onStatusFilterChange}
+        options={[
+          { value: 'all', label: 'Any' },
+          { value: 'backlog', label: 'Backlog' },
+          ...STATUSES.map((s) => ({ value: s.value, label: s.label, icon: <s.Icon /> })),
         ]}
       />
 

@@ -12,13 +12,26 @@ function formatPlaytimeHours(minutes) {
   return (minutes / 60).toFixed(1);
 }
 
-export function buildLibraryCsv(games, metadata) {
-  const headers = ['Title', 'Platform', 'Playtime (hours)', 'Genres', 'Tags', 'Cover URL'];
+export function buildLibraryCsv(games, metadata, statuses = {}, installed = {}) {
+  const headers = [
+    'Title',
+    'Platform',
+    'Status',
+    'Installed',
+    'Playtime (hours)',
+    'Genres',
+    'Tags',
+    'Cover URL',
+  ];
   const rows = games.map((game) => {
-    const entry = metadata[slugify(game.title)];
+    const slug = slugify(game.title);
+    const entry = metadata[slug];
     return [
       game.title,
       game.platform,
+      // "backlog" is the absence of a status; spell it out so the column is never blank.
+      statuses[slug]?.status ?? 'backlog',
+      installed[game.id] ? 'yes' : 'no',
       formatPlaytimeHours(game.playtimeMinutes),
       (entry?.genres ?? []).join('; '),
       (entry?.tags ?? []).join('; '),

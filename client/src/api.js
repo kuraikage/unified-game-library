@@ -28,6 +28,10 @@ const tauriApi = {
   getEnrichmentJob: () => invoke('get_enrichment_job'),
   enrichMetadata: (titles) => invoke('enrich_metadata', { titles }),
 
+  getStatuses: () => invoke('get_statuses'),
+  // `status` of null clears it, returning the game to the implicit backlog.
+  setGameStatus: (slug, status) => invoke('set_game_status', { slug, status }),
+
   getInstalled: () => invoke('get_installed'),
   launchGame: (gameId) => invoke('launch_game', { gameId }),
   installGame: (game) =>

@@ -41,6 +41,9 @@ anyhow = "1"
 thiserror = "2"
 urlencoding = "2"
 
+[dev-dependencies]
+tempdir = "0.3"
+
 # Locating the Steam install (HKCU\Software\Valve\Steam\SteamPath) and opening
 # protocol URLs without going through cmd.exe.
 [target.'cfg(windows)'.dependencies]

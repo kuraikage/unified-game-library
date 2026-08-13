@@ -13,6 +13,9 @@ const progressHandlers = new Set();
 // Stands in for the SQLite metadata cache so enriched games stop counting as missing.
 const cachedMetadata = {};
 
+// Play status, keyed by slug — mirrors the game_status table.
+const statuses = {};
+
 const SAMPLE_GENRES = ['Adventure', 'Indie', 'Role-playing (RPG)', 'Strategy', 'Shooter'];
 const SAMPLE_TAGS = ['Action', 'Fantasy', 'Science fiction', 'roguelike', 'Open world'];
 
@@ -88,6 +91,20 @@ export const devApi = {
     setTimeout(tick, 400);
     return { running: true, total, completed: 0, error: null };
   },
+  getStatuses: async () => ({ ...statuses }),
+  setGameStatus: async (slug, status) => {
+    if (status) {
+      statuses[slug] = {
+        status,
+        updatedAt: Date.now(),
+        completedAt: status === 'completed' ? (statuses[slug]?.completedAt ?? Date.now()) : null,
+      };
+    } else {
+      delete statuses[slug];
+    }
+    return { ...statuses };
+  },
+
   getInstalled: async () => installed,
   launchGame: async () => {},
   installGame: async () => {},

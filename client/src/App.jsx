@@ -37,21 +37,25 @@ export default function App() {
   const [metadataJob, setMetadataJob] = useState(EMPTY_JOB);
   const [installed, setInstalled] = useState({});
   const [installedOnly, setInstalledOnly] = useState(false);
+  const [statuses, setStatuses] = useState({});
+  const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState(null);
   const enrichRequested = useRef(false);
 
   const loadAll = useCallback(async () => {
     setError(null);
     try {
-      const [nextSettings, epic, steam, family, meta, job, installedMap] = await Promise.all([
-        api.getSettings(),
-        api.getEpicLibrary(),
-        api.getSteamLibrary(),
-        api.getFamilyLibrary().catch(() => []),
-        api.getMetadata(),
-        api.getEnrichmentJob(),
-        api.getInstalled().catch(() => ({})),
-      ]);
+      const [nextSettings, epic, steam, family, meta, job, installedMap, statusMap] =
+        await Promise.all([
+          api.getSettings(),
+          api.getEpicLibrary(),
+          api.getSteamLibrary(),
+          api.getFamilyLibrary().catch(() => []),
+          api.getMetadata(),
+          api.getEnrichmentJob(),
+          api.getInstalled().catch(() => ({})),
+          api.getStatuses().catch(() => ({})),
+        ]);
 
       setSettings(nextSettings);
       setEpicGames(epic.games ?? []);
@@ -61,6 +65,7 @@ export default function App() {
       setMetadata(meta ?? {});
       setMetadataJob(job ?? EMPTY_JOB);
       setInstalled(installedMap ?? {});
+      setStatuses(statusMap ?? {});
 
       if (!nextSettings.steamConfigured && (epic.games ?? []).length === 0) {
         setView('settings');
@@ -171,10 +176,33 @@ export default function App() {
       .filter((g) => {
         if (platform !== 'all' && g.platform !== platform) return false;
         if (installedOnly && !installed[g.id]) return false;
+        if (statusFilter !== 'all') {
+          const current = statuses[slugify(g.title)]?.status ?? null;
+          // "backlog" is the absence of a status rather than a stored value.
+          if (statusFilter === 'backlog' ? current !== null : current !== statusFilter) return false;
+        }
         if (!term) return true;
         return matchesSearch(buildHaystack(g, metadata[slugify(g.title)]), term);
       });
-  }, [allGames, search, platform, metadata, installedOnly, installed]);
+  }, [allGames, search, platform, metadata, installedOnly, installed, statusFilter, statuses]);
+
+  // Optimistic update: the button reflects the new state immediately and Rust returns the
+  // authoritative map, so a rejected value corrects itself.
+  async function handleStatusChange(game, next) {
+    const slug = slugify(game.title);
+    setStatuses((prev) => {
+      const copy = { ...prev };
+      if (next) copy[slug] = { ...(copy[slug] ?? {}), status: next };
+      else delete copy[slug];
+      return copy;
+    });
+    try {
+      setStatuses(await api.setGameStatus(slug, next));
+    } catch (err) {
+      setError(String(err));
+      setStatuses(await api.getStatuses().catch(() => ({})));
+    }
+  }
 
   const installedCount = useMemo(
     () => allGames.filter((g) => installed[g.id]).length,
@@ -209,7 +237,7 @@ export default function App() {
 
   function handleExportCsv() {
     const stamp = new Date().toISOString().slice(0, 10);
-    downloadCsv(`ugly-library-${stamp}.csv`, buildLibraryCsv(games, metadata));
+    downloadCsv(`ugly-library-${stamp}.csv`, buildLibraryCsv(games, metadata, statuses, installed));
   }
 
   const missingMetadataCount = useMemo(
@@ -338,6 +366,8 @@ export default function App() {
                 installedOnly={installedOnly}
                 onInstalledOnlyChange={setInstalledOnly}
                 installedCount={installedCount}
+                statusFilter={statusFilter}
+                onStatusFilterChange={setStatusFilter}
                 count={games.length}
                 onExport={handleExportCsv}
               />
@@ -355,8 +385,10 @@ export default function App() {
                   games={games}
                   metadata={metadata}
                   installed={installed}
+                  statuses={statuses}
                   onLaunch={handleLaunch}
                   onInstall={handleInstall}
+                  onStatusChange={handleStatusChange}
                 />
               ) : (
                 <GameList
@@ -364,8 +396,10 @@ export default function App() {
                   games={games}
                   metadata={metadata}
                   installed={installed}
+                  statuses={statuses}
                   onLaunch={handleLaunch}
                   onInstall={handleInstall}
+                  onStatusChange={handleStatusChange}
                 />
               )}
             </>

@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::credentials::{self, Secret};
-use crate::models::{slugify, EnrichmentJob, EpicLibrary, Game, MetadataEntry, SettingsView};
+use crate::models::{
+    slugify, EnrichmentJob, EpicLibrary, Game, GameStatus, MetadataEntry, SettingsView, StatusEntry,
+};
 use crate::services::{epic, igdb, steam};
 use crate::store::Store;
 
@@ -235,6 +237,41 @@ pub fn enrich_metadata(
     });
 
     Ok(state.job.lock().unwrap().clone())
+}
+
+// ---------- play status ----------
+
+#[tauri::command]
+pub fn get_statuses(
+    state: State<'_, AppState>,
+) -> CmdResult<std::collections::HashMap<String, StatusEntry>> {
+    state.store.all_statuses().map_err(to_err)
+}
+
+/// `status` is `None` to clear (back to the implicit backlog). Unknown values are
+/// rejected rather than stored, so the column can only ever hold known variants.
+#[tauri::command]
+pub fn set_game_status(
+    state: State<'_, AppState>,
+    slug: String,
+    status: Option<String>,
+) -> CmdResult<std::collections::HashMap<String, StatusEntry>> {
+    if slug.trim().is_empty() {
+        return Err("A game slug is required.".into());
+    }
+
+    let parsed = match status.as_deref() {
+        None | Some("") => None,
+        Some(value) => {
+            Some(GameStatus::parse(value).ok_or_else(|| format!("Unknown status: {value}"))?)
+        }
+    };
+
+    state
+        .store
+        .set_status(&slug, parsed, igdb::now_ms())
+        .map_err(to_err)?;
+    state.store.all_statuses().map_err(to_err)
 }
 
 // ---------- installed games ----------

@@ -27,6 +27,46 @@ pub struct MetadataEntry {
     pub fetched_at: i64,
 }
 
+/// How far along you are with a game. "Backlog" is the absence of a row rather than a
+/// variant, so untouched games cost nothing to store.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GameStatus {
+    Playing,
+    Completed,
+    Dropped,
+}
+
+impl GameStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            GameStatus::Playing => "playing",
+            GameStatus::Completed => "completed",
+            GameStatus::Dropped => "dropped",
+        }
+    }
+
+    /// Parsed at the boundary so an unexpected value from the webview is rejected rather
+    /// than written to the database as free text.
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "playing" => Some(GameStatus::Playing),
+            "completed" => Some(GameStatus::Completed),
+            "dropped" => Some(GameStatus::Dropped),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusEntry {
+    pub status: GameStatus,
+    pub updated_at: i64,
+    /// Only set while the game is marked completed.
+    pub completed_at: Option<i64>,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnrichmentJob {
@@ -150,5 +190,16 @@ mod tests {
         assert_eq!(slugify("A Plague Tale: Requiem"), "a-plague-tale-requiem");
         // Non-ASCII letters collapse to a dash and then get trimmed, same as the JS regex.
         assert_eq!(slugify("ABZÛ"), "abz");
+    }
+
+    #[test]
+    fn game_status_round_trips_and_rejects_unknown() {
+        use super::GameStatus;
+        for status in [GameStatus::Playing, GameStatus::Completed, GameStatus::Dropped] {
+            assert_eq!(GameStatus::parse(status.as_str()), Some(status));
+        }
+        assert_eq!(GameStatus::parse("finished"), None);
+        assert_eq!(GameStatus::parse(""), None);
+        assert_eq!(GameStatus::parse("PLAYING"), None);
     }
 }

@@ -81,6 +81,31 @@ export const InstalledIcon = () => (
   </svg>
 );
 
+export const PlayingIcon = () => (
+  <svg {...base}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M10 8.5v7l6-3.5z" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const CompletedIcon = () => (
+  <svg {...base}>
+    <path d="M8 21h8" />
+    <path d="M12 17v4" />
+    <path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+    <path d="M17 5h3v2a3 3 0 0 1-3 3" />
+    <path d="M7 5H4v2a3 3 0 0 0 3 3" />
+  </svg>
+);
+
+export const DroppedIcon = () => (
+  <svg {...base}>
+    <circle cx="12" cy="12" r="9" />
+    <line x1="9" y1="9" x2="15" y2="15" />
+    <line x1="15" y1="9" x2="9" y2="15" />
+  </svg>
+);
+
 export const DriveIcon = () => (
   <svg {...base}>
     <rect x="2" y="14" width="20" height="7" rx="2" />

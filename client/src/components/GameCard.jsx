@@ -1,4 +1,6 @@
 import { DriveIcon, InstallIcon, PlayIcon } from '../icons';
+import { statusMeta } from '../gameStatus';
+import StatusButtons from './StatusButtons';
 
 function formatPlaytime(minutes) {
   if (minutes === null || minutes === undefined) return null;
@@ -7,12 +9,22 @@ function formatPlaytime(minutes) {
   return hours < 10 ? `${hours.toFixed(1)} hrs` : `${Math.round(hours)} hrs`;
 }
 
-export default function GameCard({ game, coverUrl, index, installed, onLaunch, onInstall }) {
+export default function GameCard({
+  game,
+  coverUrl,
+  index,
+  installed,
+  status,
+  onLaunch,
+  onInstall,
+  onStatusChange,
+}) {
   const playtime = formatPlaytime(game.playtimeMinutes);
+  const meta = statusMeta(status);
 
   return (
     <div
-      className={`game-card${installed ? ' is-installed' : ''}`}
+      className={`game-card${installed ? ' is-installed' : ''}${status ? ` is-${status}` : ''}`}
       style={index === undefined ? undefined : { '--i': index }}
     >
       <div className="cover">
@@ -35,6 +47,12 @@ export default function GameCard({ game, coverUrl, index, installed, onLaunch, o
             installed
           </span>
         )}
+        {meta && (
+          <span className={`badge badge-status is-${status}`} title={meta.label}>
+            <meta.Icon />
+            {meta.short}
+          </span>
+        )}
 
         <div className="cover-actions">
           {installed ? (
@@ -49,6 +67,7 @@ export default function GameCard({ game, coverUrl, index, installed, onLaunch, o
               <span>{game.platform === 'epic' ? 'Store' : 'Install'}</span>
             </button>
           )}
+          <StatusButtons value={status} onChange={(next) => onStatusChange(game, next)} />
         </div>
       </div>
       <div className="game-info">
