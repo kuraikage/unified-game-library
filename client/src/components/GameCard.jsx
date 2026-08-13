@@ -46,8 +46,9 @@ function GameCard({
                 </span>
               )}
               {installed && (
-                <span className="badge badge-icon badge-installed" title="Installed on this PC">
+                <span className="badge badge-installed" title="Installed on this PC">
                   <DriveIcon />
+                  installed
                 </span>
               )}
             </span>

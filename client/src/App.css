@@ -11,6 +11,13 @@
   --status-completed: #a78bfa;
   --status-dropped: #a8a29e;
 
+  /* Shared surface for every button floating over cover art, so Play, Install/Store
+     and the status toggles read as one family. */
+  --overlay-btn-bg: rgba(10, 10, 14, 0.6);
+  --overlay-btn-bg-hover: rgba(10, 10, 14, 0.78);
+  --overlay-btn-border: rgba(255, 255, 255, 0.38);
+  --overlay-btn-border-hover: rgba(255, 255, 255, 0.7);
+
   /* easeOutQuint — decelerates hard, which is what makes motion feel "fluid" */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
@@ -795,23 +802,11 @@ hr {
 .cover-meta-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.25rem;
   max-width: 100%;
 }
 
-/* Compact square chip for icon-only indicators. */
-.badge-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.22rem;
-  line-height: 0;
-}
-
-.badge-icon svg {
-  width: 12px;
-  height: 12px;
-}
 
 .badge-steam {
   border: 1px solid #66c0f4;
@@ -844,12 +839,16 @@ hr {
 
 /* Installed state reads as a chip alongside the platform tag, so both are labelled
    the same way rather than one being a symbol you have to learn. */
+/* Filled rather than outlined: an outlined icon was too easy to miss when scanning a
+   grid, and "installed" is the thing you most often want to spot at a glance. */
 .badge-installed {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  border: 1px solid var(--installed);
-  color: #bbf7d0;
+  border: 1px solid transparent;
+  background: var(--installed);
+  color: #052e16;
+  font-weight: 600;
 }
 
 /* Subtle green halo as a second, at-a-glance cue alongside the chip. */
@@ -925,10 +924,10 @@ hr {
   height: 36px;
   padding: 0;
   border-radius: 999px;
-  /* Dark, slightly opaque base rather than a translucent white: over bright artwork
-     the old treatment washed out and the icons disappeared. */
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: rgba(10, 10, 14, 0.72);
+  /* Dark base rather than a translucent white: over bright artwork the old treatment
+     washed out and the icons disappeared. */
+  border: 1px solid var(--overlay-btn-border);
+  background: var(--overlay-btn-bg);
   color: #fff;
   opacity: 1;
 }
@@ -939,8 +938,8 @@ hr {
 }
 
 .status-button:hover:not(:disabled) {
-  background: rgba(10, 10, 14, 0.9);
-  border-color: rgba(255, 255, 255, 0.8);
+  background: var(--overlay-btn-bg-hover);
+  border-color: var(--overlay-btn-border-hover);
   box-shadow: none;
 }
 
@@ -1023,8 +1022,8 @@ hr {
   gap: 0.4rem;
   padding: 0.5rem 1rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(--overlay-btn-bg);
+  border: 1px solid var(--overlay-btn-border);
   color: #fff;
   font-size: 0.85rem;
   transform: translateY(6px);
@@ -1038,18 +1037,22 @@ hr {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--overlay-btn-bg-hover);
+  border-color: var(--overlay-btn-border-hover);
   box-shadow: none;
 }
 
+/* Play keeps its green identity but is translucent like the rest, so it reads as the
+   primary action without becoming a solid block over the artwork. */
 .action-btn.play {
-  background: #22c55e;
-  border-color: #22c55e;
-  color: #06240f;
+  background: color-mix(in srgb, var(--installed) 68%, transparent);
+  border-color: color-mix(in srgb, var(--installed) 75%, transparent);
+  color: #04240f;
 }
 
 .action-btn.play:hover:not(:disabled) {
-  background: #16a34a;
+  background: color-mix(in srgb, var(--installed) 85%, transparent);
+  border-color: var(--installed);
 }
 
 .action-btn.compact {
