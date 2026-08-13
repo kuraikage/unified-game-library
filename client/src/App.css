@@ -278,10 +278,49 @@ textarea:focus {
   margin-top: 0;
 }
 
+/* Settings panels flow into as many columns as the window allows rather than sitting
+   in one narrow strip. Columns break to a single stack below ~420px of usable width. */
 .settings-stack {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   gap: 1.25rem;
+  align-items: start;
+}
+
+.settings-stack > .panel {
+  max-width: none;
+}
+
+/* Spans every column — used for the Library data summary at the top. */
+.panel-wide {
+  grid-column: 1 / -1;
+}
+
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.4rem;
+  margin-bottom: 1rem;
+}
+
+.stat {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+.stat strong {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin-right: 0.3rem;
+  opacity: 1;
+}
+
+.stat.total strong {
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .settings-stack > * {

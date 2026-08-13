@@ -255,30 +255,29 @@ export default function App() {
         <main key={view}>
           {view === 'settings' && (
             <div className="settings-stack">
-              <SettingsPanel
-                steamId={settings.steamId}
-                steamConfigured={settings.steamConfigured}
-                igdbConfigured={settings.igdbConfigured}
-                onSaved={handleSettingsSaved}
-              />
-
-              <SteamFamilyImport count={familyGames.length} />
-
-              <EpicImport
-                compact={Boolean(epicImportedAt)}
-                onImported={() => {
-                  loadAll();
-                  setView('library');
-                }}
-              />
-
-              <div className="panel">
+              {/* Library data leads: it's what you come here to act on day to day,
+                  whereas the credential panels are set-once. */}
+              <div className="panel panel-wide">
                 <h2>Library data</h2>
-                <p className="hint">
-                  {steamGames.length} Steam · {familyGames.length} family-shared ·{' '}
-                  {epicGames.length} Epic
-                  {epicImportedAt ? <> · Epic imported {new Date(epicImportedAt).toLocaleString()}</> : null}
-                </p>
+                <div className="stat-row">
+                  <span className="stat">
+                    <strong>{steamGames.length}</strong> Steam
+                  </span>
+                  <span className="stat">
+                    <strong>{familyGames.length}</strong> family-shared
+                  </span>
+                  <span className="stat">
+                    <strong>{epicGames.length}</strong> Epic
+                  </span>
+                  <span className="stat total">
+                    <strong>{allGames.length}</strong> total
+                  </span>
+                  {epicImportedAt && (
+                    <span className="stat muted">
+                      Epic imported {new Date(epicImportedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
                 <div className="button-row">
                   <button type="button" onClick={handleRefreshSteam} disabled={refreshing}>
                     {refreshing ? 'Refreshing Steam...' : 'Refresh Steam'}
@@ -307,6 +306,23 @@ export default function App() {
                 </p>
                 {metadataJob.error && <p className="error">{metadataJob.error}</p>}
               </div>
+
+              <SettingsPanel
+                steamId={settings.steamId}
+                steamConfigured={settings.steamConfigured}
+                igdbConfigured={settings.igdbConfigured}
+                onSaved={handleSettingsSaved}
+              />
+
+              <SteamFamilyImport count={familyGames.length} />
+
+              <EpicImport
+                compact={Boolean(epicImportedAt)}
+                onImported={() => {
+                  loadAll();
+                  setView('library');
+                }}
+              />
             </div>
           )}
 
