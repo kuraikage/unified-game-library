@@ -26,6 +26,20 @@ genres, tags and cover art, so you can search by mood instead of memory: `roguel
 Still can't decide? Export the whole thing to CSV and throw it at an AI to pick something based on
 your mood.
 
+## Screenshots
+
+<img src="docs/screenshots/library-grid.png" alt="Grid view showing the combined library with cover art and an installed badge" />
+
+<sub>Grid view — Steam, Epic and Steam Family in one place, with installed games marked.</sub>
+
+<img src="docs/screenshots/library-list.png" alt="List view showing title, platform, playtime, genres and tags with Play and Store actions" />
+
+<sub>List view — genres and tags from IGDB, with Play or Store depending on whether it's installed.</sub>
+
+<img src="docs/screenshots/settings.png" alt="Settings screen showing library counts, connection status and the import bookmarklets" />
+
+<sub>Settings — library totals, connection status, and the one-time bookmarklet setup.</sub>
+
 ## Features
 
 - **One library** — Steam and Epic Games side by side, including Steam Family shared games
