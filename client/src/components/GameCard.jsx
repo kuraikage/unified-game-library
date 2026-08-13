@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { DriveIcon, InstallIcon, PlayIcon } from '../icons';
 import { statusMeta } from '../gameStatus';
 import StatusButtons from './StatusButtons';
@@ -9,7 +10,7 @@ function formatPlaytime(minutes) {
   return hours < 10 ? `${hours.toFixed(1)} hrs` : `${Math.round(hours)} hrs`;
 }
 
-export default function GameCard({
+function GameCard({
   game,
   coverUrl,
   index,
@@ -79,3 +80,7 @@ export default function GameCard({
     </div>
   );
 }
+
+// Filtering re-renders the whole grid; without this every surviving card re-renders
+// even though nothing about it changed. Callbacks are stable via useCallback in App.
+export default memo(GameCard);

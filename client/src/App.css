@@ -502,21 +502,27 @@ hr {
 
 .filter-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.7rem;
   margin-bottom: 1.25rem;
   animation: rise-in 0.45s var(--ease) both;
 }
 
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 /* Segmented groups size to their content, so they must be allowed to wrap onto a new
    row rather than overflow when the window is narrow. */
-.filter-bar > .segmented,
-.filter-bar > .pill-button {
+.filter-row > .segmented,
+.filter-row > .pill-button {
   flex: 0 0 auto;
 }
 
-.count {
+.search-row .count {
   margin-left: auto;
 }
 
@@ -694,6 +700,11 @@ hr {
     transform var(--dur) var(--ease),
     box-shadow var(--dur) var(--ease),
     border-color var(--dur) var(--ease);
+  /* Lets the browser skip layout and paint for cards that are off screen. With a
+     900+ game library this is the difference between a snappy filter switch and a
+     visible stall. contain-intrinsic-size keeps the scrollbar stable meanwhile. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 210px;
 }
 
 /* Only the first rows animate in — running this on a 700-card library would thrash. */
@@ -752,8 +763,9 @@ hr {
   letter-spacing: 0.03em;
   padding: 0.18rem 0.45rem;
   border-radius: 5px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  /* Deliberately no backdrop-filter: it forces a compositing layer per badge, and a
+     large library has thousands of them. A solid colour is indistinguishable here. */
+  background: rgba(8, 8, 12, 0.82);
   color: white;
   white-space: nowrap;
 }
@@ -1094,7 +1106,7 @@ hr {
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
-  backdrop-filter: blur(8px);
+  background: #16171d;
 }
 
 .game-list td {

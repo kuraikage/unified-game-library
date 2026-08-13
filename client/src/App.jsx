@@ -188,7 +188,7 @@ export default function App() {
 
   // Optimistic update: the button reflects the new state immediately and Rust returns the
   // authoritative map, so a rejected value corrects itself.
-  async function handleStatusChange(game, next) {
+  const handleStatusChange = useCallback(async (game, next) => {
     const slug = slugify(game.title);
     setStatuses((prev) => {
       const copy = { ...prev };
@@ -202,14 +202,16 @@ export default function App() {
       setError(String(err));
       setStatuses(await api.getStatuses().catch(() => ({})));
     }
-  }
+  }, []);
 
   const installedCount = useMemo(
     () => allGames.filter((g) => installed[g.id]).length,
     [allGames, installed]
   );
 
-  async function handleLaunch(game) {
+  // These are passed to every card, so they must keep a stable identity or memo()
+  // on GameCard would never prevent a re-render.
+  const handleLaunch = useCallback(async (game) => {
     setNotice(null);
     try {
       await api.launchGame(game.id);
@@ -218,9 +220,9 @@ export default function App() {
     } catch (err) {
       setError(String(err));
     }
-  }
+  }, []);
 
-  async function handleInstall(game) {
+  const handleInstall = useCallback(async (game) => {
     setNotice(null);
     try {
       await api.installGame(game);
@@ -233,7 +235,7 @@ export default function App() {
     } catch (err) {
       setError(String(err));
     }
-  }
+  }, []);
 
   function handleExportCsv() {
     const stamp = new Date().toISOString().slice(0, 10);
@@ -379,9 +381,10 @@ export default function App() {
                 onEnrich={handleEnrichNow}
                 onDismissError={() => setMetadataJob({ ...metadataJob, error: null })}
               />
+              {/* No `key` here on purpose: forcing a remount threw away and rebuilt
+                  every card, which is the bulk of the cost when switching views. */}
               {viewMode === 'grid' ? (
                 <GameGrid
-                  key="grid"
                   games={games}
                   metadata={metadata}
                   installed={installed}
@@ -392,7 +395,6 @@ export default function App() {
                 />
               ) : (
                 <GameList
-                  key="list"
                   games={games}
                   metadata={metadata}
                   installed={installed}

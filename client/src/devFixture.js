@@ -19,7 +19,10 @@ const statuses = {};
 const SAMPLE_GENRES = ['Adventure', 'Indie', 'Role-playing (RPG)', 'Strategy', 'Shooter'];
 const SAMPLE_TAGS = ['Action', 'Fantasy', 'Science fiction', 'roguelike', 'Open world'];
 
-const sampleGames = Array.from({ length: 60 }, (_, i) => ({
+// Sized to match a real library so performance work is measured against the real thing.
+const SAMPLE_SIZE = Number(import.meta.env.VITE_FIXTURE_SIZE ?? 900);
+
+const sampleGames = Array.from({ length: SAMPLE_SIZE }, (_, i) => ({
   id: `${PLATFORMS[i % 2]}-${1000 + i}`,
   platform: PLATFORMS[i % 2],
   title: `Sample Game ${String(i + 1).padStart(2, '0')}`,
