@@ -34,23 +34,25 @@ function GameCard({
 
         {/* Persistent information, gathered into one strip along the bottom instead of
             scattered across corners. The scrim keeps it legible over any artwork. */}
+        {/* Installed hangs as a pennant from the top edge, clear of the meta strip.
+            The shadow lives on the wrapper because filter is applied before clip-path,
+            so a filter on the clipped element itself would have its shadow clipped away. */}
+        {installed && (
+          <span className="cover-pennant" title="Installed on this PC">
+            <span className="cover-pennant-shape">
+              <DriveIcon />
+            </span>
+          </span>
+        )}
+
         <div className="cover-meta">
-          {/* Status reads as a word — the icon alone wasn't clear enough. Installed
-              stays an icon since it's a simple yes/no and the label repeats the filter. */}
-          {(meta || installed) && (
+          {/* Status reads as a word — the icon alone wasn't clear enough. */}
+          {meta && (
             <span className="cover-meta-row">
-              {meta && (
-                <span className={`badge badge-status is-${status}`} title={meta.label}>
-                  <meta.Icon />
-                  {meta.short}
-                </span>
-              )}
-              {installed && (
-                <span className="badge badge-installed" title="Installed on this PC">
-                  <DriveIcon />
-                  installed
-                </span>
-              )}
+              <span className={`badge badge-status is-${status}`} title={meta.label}>
+                <meta.Icon />
+                {meta.short}
+              </span>
             </span>
           )}
           <span className="cover-meta-row">

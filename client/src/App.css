@@ -839,6 +839,36 @@ hr {
 
 /* Installed state reads as a chip alongside the platform tag, so both are labelled
    the same way rather than one being a symbol you have to learn. */
+/* Installed pennant: hangs from the top edge of the cover with a notched tail.
+   Two elements on purpose — filter is applied before clip-path, so a drop-shadow on
+   the clipped element would be clipped away with it. The wrapper carries the shadow,
+   which then follows the pennant's silhouette including the notch. */
+.cover-pennant {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  z-index: 2;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+
+.cover-pennant-shape {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 22px;
+  height: 34px;
+  padding-top: 5px;
+  background: var(--installed);
+  color: #052e16;
+  clip-path: polygon(0 0, 100% 0, 100% 78%, 50% 100%, 0 78%);
+}
+
+.cover-pennant-shape svg {
+  width: 12px;
+  height: 12px;
+}
+
 /* Filled rather than outlined: an outlined icon was too easy to miss when scanning a
    grid, and "installed" is the thing you most often want to spot at a glance. */
 .badge-installed {
@@ -1042,17 +1072,17 @@ hr {
   box-shadow: none;
 }
 
-/* Play keeps its green identity but is translucent like the rest, so it reads as the
-   primary action without becoming a solid block over the artwork. */
+/* Play keeps its green identity but shares the same outline as Install/Store, so the
+   three read as one family with colour as the only difference. */
 .action-btn.play {
   background: color-mix(in srgb, var(--installed) 68%, transparent);
-  border-color: color-mix(in srgb, var(--installed) 75%, transparent);
+  border-color: var(--overlay-btn-border);
   color: #04240f;
 }
 
 .action-btn.play:hover:not(:disabled) {
   background: color-mix(in srgb, var(--installed) 85%, transparent);
-  border-color: var(--installed);
+  border-color: var(--overlay-btn-border-hover);
 }
 
 .action-btn.compact {
