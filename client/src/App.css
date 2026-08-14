@@ -1042,6 +1042,10 @@ hr {
   backdrop-filter: blur(2px);
   opacity: 0;
   transition: opacity var(--dur) var(--ease);
+  /* The overlay spans the whole cover, so without this it swallows every click on the
+     artwork and only the title strip below would open the detail panel. The buttons
+     opt back in. */
+  pointer-events: none;
 }
 
 /* Keyboard focus must still reveal the actions. A mouse click also leaves the button
@@ -1051,6 +1055,11 @@ hr {
 .game-card:hover .cover-actions,
 .game-card:focus-within .cover-actions {
   opacity: 1;
+}
+
+.cover-actions .action-btn,
+.cover-actions .status-buttons {
+  pointer-events: auto;
 }
 
 .action-btn {
@@ -1269,6 +1278,10 @@ hr {
   height: 190px;
   overflow: hidden;
   background: #1c1c22;
+}
+
+.detail-hero.is-bare {
+  height: 96px;
 }
 
 .detail-hero-art {

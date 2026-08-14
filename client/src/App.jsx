@@ -455,6 +455,9 @@ export default function App() {
 
       {detailGame && (
         <GameDetail
+          // Remount per game so per-game state (a failed hero image) and the mount-only
+          // focus effect both reset when you open a different card.
+          key={detailGame.id}
           game={detailGame}
           entry={metadata[slugify(detailGame.title)]}
           coverSources={coverSources(detailGame, metadata[slugify(detailGame.title)])}

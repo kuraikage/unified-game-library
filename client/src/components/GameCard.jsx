@@ -81,14 +81,16 @@ function GameCard({
         </div>
 
         {/* Actions only — these appear on hover, since they're things you do rather
-            than things you need to see while scanning.
-            The click guard keeps them from also opening the detail panel. */}
-        <div className="cover-actions" onClick={(e) => e.stopPropagation()}>
+            than things you need to see while scanning. The container is click-through
+            (see App.css); each button stops its own click so pressing Play doesn't also
+            open the detail panel. */}
+        <div className="cover-actions">
           {installed ? (
             <button
               type="button"
               className="action-btn play"
               onClick={(e) => {
+                e.stopPropagation();
                 blurIfPointerClick(e);
                 onLaunch(game);
               }}
@@ -102,6 +104,7 @@ function GameCard({
               type="button"
               className="action-btn"
               onClick={(e) => {
+                e.stopPropagation();
                 blurIfPointerClick(e);
                 onInstall(game);
               }}

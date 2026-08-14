@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { DriveIcon, InstallIcon, PlayIcon } from '../icons';
 import { statusMeta } from '../gameStatus';
 import StatusButtons from './StatusButtons';
 import CoverImage from './CoverImage';
+
+const FOCUS = { preventScroll: true };
 
 function formatPlaytime(minutes) {
   if (minutes === null || minutes === undefined) return null;
@@ -49,6 +52,9 @@ export default function GameDetail({
 }) {
   const panelRef = useRef(null);
   const closeRef = useRef(null);
+  // Not every game with an appid has key art, and a broken image would leave the same
+  // empty band the bare layout exists to avoid.
+  const [heroFailed, setHeroFailed] = useState(false);
 
   // Held in a ref so the effect below can stay mount-only. The parent passes a fresh
   // closure on every render, and it re-renders several times a second while a metadata
@@ -63,7 +69,11 @@ export default function GameDetail({
     // Remembered so closing returns you to the card you opened, rather than to the top
     // of the document.
     const returnTo = document.activeElement;
-    closeRef.current?.focus();
+    // preventScroll on every focus call in here. The panel is fixed and already on
+    // screen, but the browser still scrolls the document to "reveal" the focused
+    // button — with content-visibility on the cards behind, that threw the grid
+    // thousands of pixels away on open and back again on close.
+    closeRef.current?.focus(FOCUS);
 
     function onKeyDown(event) {
       if (event.key === 'Escape') {
@@ -85,23 +95,23 @@ export default function GameDetail({
       // back in first.
       if (!panelRef.current.contains(document.activeElement)) {
         event.preventDefault();
-        (event.shiftKey ? last : first).focus();
+        (event.shiftKey ? last : first).focus(FOCUS);
         return;
       }
 
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
-        last.focus();
+        last.focus(FOCUS);
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
-        first.focus();
+        first.focus(FOCUS);
       }
     }
 
     document.addEventListener('keydown', onKeyDown, true);
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
-      if (returnTo instanceof HTMLElement && document.contains(returnTo)) returnTo.focus();
+      if (returnTo instanceof HTMLElement && document.contains(returnTo)) returnTo.focus(FOCUS);
     };
     // Mount only — see onCloseRef above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,9 +121,14 @@ export default function GameDetail({
   const playtime = formatPlaytime(game.playtimeMinutes);
   const released = formatReleased(entry?.releasedAt);
   const reviews = reviewSummary(entry);
-  const hero = heroUrl(game);
+  const hero = heroFailed ? null : heroUrl(game);
 
-  return (
+  // Rendered into <body> rather than in place. `.app` keeps an identity transform after
+  // its entrance animation (fill-mode: both), and any transform — even an identity one —
+  // makes an element the containing block for `position: fixed`. Nested inside it the
+  // backdrop sized itself to the whole scrollable page instead of the viewport, which
+  // centred the panel in the middle of the grid and dragged the page there to reach it.
+  return createPortal(
     <div className="detail-backdrop" onClick={onClose}>
       <div
         className="detail-panel"
@@ -123,8 +138,18 @@ export default function GameDetail({
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="detail-hero">
-          {hero && <img src={hero} alt="" className="detail-hero-art" loading="lazy" />}
+        {/* Without Steam key art the band collapses to just enough room for the cover to
+            overlap, rather than leaving a strip of empty colour. */}
+        <div className={`detail-hero${hero ? '' : ' is-bare'}`}>
+          {hero && (
+            <img
+              src={hero}
+              alt=""
+              className="detail-hero-art"
+              loading="lazy"
+              onError={() => setHeroFailed(true)}
+            />
+          )}
           <div className="detail-hero-cover">
             <CoverImage sources={coverSources} fallbackText={game.title.slice(0, 1)} />
           </div>
@@ -236,6 +261,7 @@ export default function GameDetail({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
