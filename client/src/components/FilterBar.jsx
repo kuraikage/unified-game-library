@@ -19,7 +19,10 @@ export default function FilterBar({
 }) {
   return (
     <div className="filter-bar">
-      <div className="search-wrap">
+      {/* Search gets its own row; the filter capsules sit beneath it so neither has to
+          fight for width once there are four of them plus the count and export. */}
+      <div className="filter-row search-row">
+        <div className="search-wrap">
         <span className="search-icon">
           <SearchIcon />
         </span>
@@ -30,13 +33,35 @@ export default function FilterBar({
           placeholder="Search by title, genre or tag..."
           className="search"
         />
-        {search && (
-          <button type="button" className="search-clear" onClick={() => onSearchChange('')} aria-label="Clear search">
-            ×
-          </button>
-        )}
+          {search && (
+            <button type="button" className="search-clear" onClick={() => onSearchChange('')} aria-label="Clear search">
+              ×
+            </button>
+          )}
+        </div>
+        <span className="count">{count} games</span>
+        <SegmentedControl
+          ariaLabel="View mode"
+          value={viewMode}
+          onChange={onViewModeChange}
+          options={[
+            { value: 'grid', label: 'Grid', icon: <GridIcon /> },
+            { value: 'list', label: 'List', icon: <ListIcon /> },
+          ]}
+        />
+        <button
+          type="button"
+          className="pill-button"
+          onClick={onExport}
+          disabled={count === 0}
+          title="Export the games currently shown to CSV"
+        >
+          <DownloadIcon />
+          <span>Export</span>
+        </button>
       </div>
 
+      <div className="filter-row">
       <SegmentedControl
         ariaLabel="Filter by platform"
         value={platform}
@@ -45,16 +70,6 @@ export default function FilterBar({
           { value: 'all', label: 'All' },
           { value: 'steam', label: 'Steam' },
           { value: 'epic', label: 'Epic' },
-        ]}
-      />
-
-      <SegmentedControl
-        ariaLabel="View mode"
-        value={viewMode}
-        onChange={onViewModeChange}
-        options={[
-          { value: 'grid', label: 'Grid', icon: <GridIcon /> },
-          { value: 'list', label: 'List', icon: <ListIcon /> },
         ]}
       />
 
@@ -83,18 +98,7 @@ export default function FilterBar({
         ]}
       />
 
-      <span className="count">{count} games</span>
-
-      <button
-        type="button"
-        className="pill-button"
-        onClick={onExport}
-        disabled={count === 0}
-        title="Export the games currently shown to CSV"
-      >
-        <DownloadIcon />
-        <span>Export</span>
-      </button>
+      </div>
     </div>
   );
 }

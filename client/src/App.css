@@ -11,6 +11,13 @@
   --status-completed: #a78bfa;
   --status-dropped: #a8a29e;
 
+  /* Shared surface for every button floating over cover art, so Play, Install/Store
+     and the status toggles read as one family. */
+  --overlay-btn-bg: rgba(10, 10, 14, 0.6);
+  --overlay-btn-bg-hover: rgba(10, 10, 14, 0.78);
+  --overlay-btn-border: rgba(255, 255, 255, 0.38);
+  --overlay-btn-border-hover: rgba(255, 255, 255, 0.7);
+
   /* easeOutQuint — decelerates hard, which is what makes motion feel "fluid" */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
@@ -283,20 +290,27 @@ textarea:focus {
 
 /* Settings panels flow into as many columns as the window allows rather than sitting
    in one narrow strip. Columns break to a single stack below ~420px of usable width. */
+/* Multi-column rather than grid: these panels differ a lot in height, and grid rows are
+   as tall as their tallest cell, which left a dead gap under every shorter panel. Columns
+   flow each panel directly under the previous one instead. */
 .settings-stack {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  gap: 1.25rem;
-  align-items: start;
+  columns: 420px 2;
+  column-gap: 1.25rem;
 }
 
 .settings-stack > .panel {
   max-width: none;
 }
 
+.settings-stack > * {
+  /* A panel split across a column boundary would be unreadable. */
+  break-inside: avoid;
+  margin-bottom: 1.25rem;
+}
+
 /* Spans every column — used for the Library data summary at the top. */
 .panel-wide {
-  grid-column: 1 / -1;
+  column-span: all;
 }
 
 .stat-row {
@@ -502,21 +516,27 @@ hr {
 
 .filter-bar {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.7rem;
   margin-bottom: 1.25rem;
   animation: rise-in 0.45s var(--ease) both;
 }
 
+.filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 /* Segmented groups size to their content, so they must be allowed to wrap onto a new
    row rather than overflow when the window is narrow. */
-.filter-bar > .segmented,
-.filter-bar > .pill-button {
+.filter-row > .segmented,
+.filter-row > .pill-button {
   flex: 0 0 auto;
 }
 
-.count {
+.search-row .count {
   margin-left: auto;
 }
 
@@ -679,9 +699,8 @@ hr {
 
 .game-grid {
   display: grid;
-  /* ~14% wider than before, which also gives the cover enough height that the corner
-     chips clear the centred Play button. */
-  grid-template-columns: repeat(auto-fill, minmax(194px, 1fr));
+  /* Portrait covers are tall, so narrower columns keep a sensible card height. */
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 1.1rem;
 }
 
@@ -694,6 +713,12 @@ hr {
     transform var(--dur) var(--ease),
     box-shadow var(--dur) var(--ease),
     border-color var(--dur) var(--ease);
+  /* Lets the browser skip layout and paint for cards that are off screen. With a
+     900+ game library this is the difference between a snappy filter switch and a
+     visible stall. contain-intrinsic-size keeps the scrollbar stable meanwhile. */
+  content-visibility: auto;
+  /* Roughly a portrait cover plus the title block. */
+  contain-intrinsic-size: auto 350px;
 }
 
 /* Only the first rows animate in — running this on a 700-card library would thrash. */
@@ -717,7 +742,9 @@ hr {
 
 .cover {
   position: relative;
-  aspect-ratio: 460 / 215;
+  /* Portrait, matching Steam's library art and IGDB covers. The old landscape frame
+     cropped IGDB's portrait covers badly and left no room for overlays. */
+  aspect-ratio: 2 / 3;
   background: #1c1c22;
   overflow: hidden;
 }
@@ -752,30 +779,41 @@ hr {
   letter-spacing: 0.03em;
   padding: 0.18rem 0.45rem;
   border-radius: 5px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
+  /* Deliberately no backdrop-filter: it forces a compositing layer per badge, and a
+     large library has thousands of them. A solid colour is indistinguishable here. */
+  background: rgba(8, 8, 12, 0.82);
   color: white;
   white-space: nowrap;
 }
 
-/* Only the grid card overlays its badge on top of the cover art.
-   z-index keeps it above the hover overlay instead of disappearing behind it. */
-.cover .badge {
+/* Persistent info strip along the bottom of the cover. Grouping the chips in one
+   place reads as designed, where three scattered corners read as clutter. */
+.cover-meta {
   position: absolute;
-  top: 0.45rem;
-  right: 0.45rem;
+  right: 0;
+  bottom: 0;
+  left: 0;
   z-index: 2;
-  opacity: 0;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--dur) var(--ease),
-    transform var(--dur) var(--ease);
+  /* Stacked rows: a status word plus the platform chip won't fit on one line at
+     these card widths, so each gets its own line rather than being truncated. */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  padding: 1.8rem 0.45rem 0.45rem;
+  /* Scrim so chips stay legible over bright artwork. */
+  background: linear-gradient(to top, rgba(6, 6, 10, 0.92), rgba(6, 6, 10, 0));
+  pointer-events: none;
 }
 
-.game-card:hover .cover .badge {
-  opacity: 1;
-  transform: translateY(0);
+.cover-meta-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 100%;
 }
+
 
 .badge-steam {
   border: 1px solid #66c0f4;
@@ -808,12 +846,46 @@ hr {
 
 /* Installed state reads as a chip alongside the platform tag, so both are labelled
    the same way rather than one being a symbol you have to learn. */
+/* Installed pennant: hangs from the top edge of the cover with a notched tail.
+   Two elements on purpose — filter is applied before clip-path, so a drop-shadow on
+   the clipped element would be clipped away with it. The wrapper carries the shadow,
+   which then follows the pennant's silhouette including the notch. */
+.cover-pennant {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  z-index: 2;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.55));
+  pointer-events: none;
+}
+
+.cover-pennant-shape {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 22px;
+  height: 34px;
+  padding-top: 5px;
+  background: var(--installed);
+  color: #052e16;
+  clip-path: polygon(0 0, 100% 0, 100% 78%, 50% 100%, 0 78%);
+}
+
+.cover-pennant-shape svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Filled rather than outlined: an outlined icon was too easy to miss when scanning a
+   grid, and "installed" is the thing you most often want to spot at a glance. */
 .badge-installed {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
-  border: 1px solid var(--installed);
-  color: #bbf7d0;
+  border: 1px solid transparent;
+  background: var(--installed);
+  color: #052e16;
+  font-weight: 600;
 }
 
 /* Subtle green halo as a second, at-a-glance cue alongside the chip. */
@@ -834,18 +906,6 @@ hr {
   height: 11px;
 }
 
-/* Top-LEFT, opposite the platform tag: the Play/Install button is centred on the cover,
-   so anything stacked below the platform tag would sit right on top of it. Stays visible
-   rather than hover-only, so the installed set is scannable across the whole grid. */
-.cover .badge-installed {
-  position: absolute;
-  top: 0.45rem;
-  left: 0.45rem;
-  right: auto;
-  z-index: 2;
-  opacity: 1;
-  transform: none;
-}
 
 /* ---------- play status ---------- */
 
@@ -875,18 +935,6 @@ hr {
   color: #d6d3d1;
 }
 
-/* Sits bottom-left of the cover, clear of the platform and installed chips. */
-.cover .badge-status {
-  position: absolute;
-  top: auto;
-  right: auto;
-  bottom: 0.45rem;
-  left: 0.45rem;
-  z-index: 2;
-  opacity: 1;
-  transform: none;
-}
-
 /* Completed games recede slightly so the backlog stands out when browsing. */
 .game-card.is-completed .cover img,
 .game-card.is-dropped .cover img {
@@ -909,20 +957,27 @@ hr {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.12);
+  /* Dark base rather than a translucent white: over bright artwork the old treatment
+     washed out and the icons disappeared. */
+  border: 1px solid var(--overlay-btn-border);
+  background: var(--overlay-btn-bg);
   color: #fff;
-  opacity: 0.85;
+  opacity: 1;
+}
+
+.status-button svg {
+  width: 17px;
+  height: 17px;
 }
 
 .status-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.22);
+  background: var(--overlay-btn-bg-hover);
+  border-color: var(--overlay-btn-border-hover);
   box-shadow: none;
-  opacity: 1;
 }
 
 .status-button.active.is-playing {
@@ -987,11 +1042,24 @@ hr {
   backdrop-filter: blur(2px);
   opacity: 0;
   transition: opacity var(--dur) var(--ease);
+  /* The overlay spans the whole cover, so without this it swallows every click on the
+     artwork and only the title strip below would open the detail panel. The buttons
+     opt back in. */
+  pointer-events: none;
 }
 
+/* Keyboard focus must still reveal the actions. A mouse click also leaves the button
+   focused, which used to keep this stuck open after the pointer left — that's handled
+   by blurring on pointer clicks only (see StatusButtons), rather than by weakening
+   this selector, since :focus-visible isn't reliably matched in this webview. */
 .game-card:hover .cover-actions,
 .game-card:focus-within .cover-actions {
   opacity: 1;
+}
+
+.cover-actions .action-btn,
+.cover-actions .status-buttons {
+  pointer-events: auto;
 }
 
 .action-btn {
@@ -1000,8 +1068,8 @@ hr {
   gap: 0.4rem;
   padding: 0.5rem 1rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(--overlay-btn-bg);
+  border: 1px solid var(--overlay-btn-border);
   color: #fff;
   font-size: 0.85rem;
   transform: translateY(6px);
@@ -1015,18 +1083,22 @@ hr {
 }
 
 .action-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.24);
+  background: var(--overlay-btn-bg-hover);
+  border-color: var(--overlay-btn-border-hover);
   box-shadow: none;
 }
 
+/* Play keeps its green identity but shares the same outline as Install/Store, so the
+   three read as one family with colour as the only difference. */
 .action-btn.play {
-  background: #22c55e;
-  border-color: #22c55e;
-  color: #06240f;
+  background: color-mix(in srgb, var(--installed) 68%, transparent);
+  border-color: var(--overlay-btn-border);
+  color: #04240f;
 }
 
 .action-btn.play:hover:not(:disabled) {
-  background: #16a34a;
+  background: color-mix(in srgb, var(--installed) 85%, transparent);
+  border-color: var(--overlay-btn-border-hover);
 }
 
 .action-btn.compact {
@@ -1094,7 +1166,7 @@ hr {
   border-bottom: 1px solid var(--line);
   position: sticky;
   top: 0;
-  backdrop-filter: blur(8px);
+  background: #16171d;
 }
 
 .game-list td {
@@ -1105,6 +1177,8 @@ hr {
 }
 
 .game-list tbody tr {
+  /* Rows open the detail panel, same as cards. */
+  cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease);
 }
 
@@ -1172,4 +1246,191 @@ hr {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---------- game detail panel ---------- */
+
+.detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: rgba(4, 4, 8, 0.72);
+  backdrop-filter: blur(3px);
+  animation: fade-in 0.18s var(--ease-soft) both;
+}
+
+.detail-panel {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: #14141a;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  animation: rise-in 0.28s var(--ease) both;
+}
+
+.detail-hero {
+  position: relative;
+  height: 190px;
+  overflow: hidden;
+  background: #1c1c22;
+}
+
+
+.detail-hero-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Fades into the body so the title sits on flat colour rather than busy artwork. */
+  mask-image: linear-gradient(to bottom, #000 35%, transparent);
+}
+
+
+/* Positioned against the panel, not the hero, so it lands in the same place whether or
+   not there is key art. */
+.detail-close {
+  position: absolute;
+  z-index: 2;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  background: var(--overlay-btn-bg);
+  border: 1px solid var(--overlay-btn-border);
+  color: #fff;
+}
+
+.detail-close:hover {
+  background: var(--overlay-btn-bg-hover);
+  border-color: var(--overlay-btn-border-hover);
+}
+
+.detail-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+/* With no hero band above it, the title needs room for the close button. */
+.detail-body.is-bare {
+  padding-top: 3.25rem;
+}
+
+.detail-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.detail-blurb {
+  margin: 0 0 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.detail-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0 0 1.2rem;
+}
+
+.detail-facts dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  margin-bottom: 0.15rem;
+}
+
+.detail-facts dd {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.detail-fact-wide {
+  grid-column: 1 / -1;
+}
+
+.detail-path {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  word-break: break-all;
+}
+
+.detail-section {
+  margin-bottom: 1rem;
+}
+
+.detail-section h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  font-weight: 600;
+}
+
+/* The list view caps pill rows narrow; here there's room to use the full width. */
+.detail-panel .pills {
+  max-width: none;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.3rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line);
+}
+
+/* The overlay buttons are sized for floating over cover art; in the panel they sit on a
+   solid surface and need a visible edge of their own. */
+.detail-actions .action-btn {
+  position: static;
+  opacity: 1;
+  transform: none;
+}
+
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Footer line under the settings columns: app version and project link. */
+.settings-version {
+  column-span: all;
+  margin: 0.5rem 0 0;
+  text-align: center;
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
+
+.settings-version a {
+  color: inherit;
+}
+
+.settings-version-sep {
+  margin: 0 0.5rem;
+  opacity: 0.6;
 }

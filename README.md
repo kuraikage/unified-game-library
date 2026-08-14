@@ -24,7 +24,7 @@ genres, tags and cover art, so you can search by mood instead of memory: `roguel
 `point and click`. Games already installed are marked and launch straight from the grid.
 
 Still can't decide? Export the whole thing to CSV and throw it at an AI to pick something based on
-your mood.
+your mood — or connect the [built-in MCP server](#ask-an-ai-what-to-play) and just ask.
 
 ## Screenshots
 
@@ -32,13 +32,15 @@ your mood.
 
 <sub>Grid view — Steam, Epic and Steam Family in one place, with installed games marked.</sub>
 
-<img src="docs/screenshots/library-list.png" alt="List view showing title, platform, playtime, genres and tags with Play and Store actions" />
+<img src="docs/screenshots/library-list.png" alt="List view showing title, platform, playtime, genres and Steam tags with Play and Store actions" />
 
-<sub>List view — genres and tags from IGDB, with Play or Store depending on whether it's installed.</sub>
+<sub>List view — Steam's player-voted tags alongside IGDB genres, with Play or Store depending on
+whether it's installed. Clicking any row or card opens the full details.</sub>
 
 <img src="docs/screenshots/settings.png" alt="Settings screen showing library counts, connection status and the import bookmarklets" />
 
-<sub>Settings — library totals, connection status, and the one-time bookmarklet setup.</sub>
+<sub>Settings — library totals, connection status, the one-time bookmarklet setup, and the MCP
+server details.</sub>
 
 ## Features
 
@@ -48,9 +50,15 @@ your mood.
   (`sci-fi` → *Science fiction*, `fps` → *Shooter*, `deckbuilder` → *Card & Board Game*)
 - **Installed detection** — sees what's on disk across every Steam library folder and Epic's
   manifests, with Play / Install buttons that hand off to the right launcher
-- **Genres, tags and artwork** from IGDB, fetched automatically for new games
+- **Tags worth searching** — Steam's player-voted tags (`Souls-like`, `Metroidvania`, `Cozy`),
+  topped up with genres and cover art from IGDB. Epic-only games are matched to their Steam page
+  where one exists, so they get the same tags
+- **Game details** — click any card for the blurb, review score, release date, developer and the
+  full tag list
 - **CSV export** of whatever the current filter is showing — feed it to an LLM and let it pick
 - **Grid and list views**, filterable by platform or installed state
+- **MCP server** so Claude, Codex or any MCP client can search your library and recommend
+  something to play
 
 ## Install
 
@@ -76,15 +84,22 @@ configured yet.
 
 Your profile's game details need to be public for the API to return your library.
 
-### IGDB (genres, tags, artwork) — optional
+### Tags and artwork
+
+**Steam tags need no setup.** UGLy reads Steam's player-voted tags for every game with a store
+page — including Epic-only games, whose titles are matched to Steam once and cached. This is
+batched, so the whole library takes a few seconds, and it is where the genuinely useful labels
+come from: `Souls-like`, `Metroidvania`, `Bullet Hell`, `Cozy`.
+
+**IGDB is optional** and adds genres and portrait cover art, plus tags for the games with no
+Steam page at all:
 
 1. Register a free application at the
    [Twitch developer console](https://dev.twitch.tv/console/apps).
 2. Paste the Client ID and Client Secret into **Settings**.
 
-Lookups then happen on their own: whenever the library gains games with no metadata, UGLy fetches
-just those in the background and shows live progress. Results are cached permanently, so only
-genuinely new titles ever cost a request.
+Lookups then happen on their own in the background, one game at a time, with live progress.
+Results are cached, so only genuinely new titles cost a request.
 
 ### Epic Games
 
@@ -108,6 +123,84 @@ second bookmarklet that reads a short-lived session token. Same flow: copy it fr
 save it as a bookmark, then click it while logged in at
 [store.steampowered.com](https://store.steampowered.com). The token is used once and never stored.
 
+## Ask an AI what to play
+
+UGLy ships a small [MCP](https://modelcontextprotocol.io) server, so an assistant can read your
+library and answer the question the app exists to solve:
+
+> *"I've got about two hours and I want something atmospheric I can finish in one sitting. What's
+> installed that fits?"*
+
+Open **Settings → Ask an AI what to play**. It shows the full path to the bundled `ugly-mcp`
+binary and a **Copy config** button — whichever client you use, that path is what it needs.
+
+<details>
+<summary>Claude Desktop</summary>
+
+Press **Copy config** in Settings and paste it into `claude_desktop_config.json`, then restart
+Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "ugly": {
+      "command": "C:\\Users\\you\\AppData\\Local\\UGLy\\ugly-mcp.exe",
+      "args": []
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary>Claude Code</summary>
+
+```bash
+claude mcp add ugly -- "C:\Users\you\AppData\Local\UGLy\ugly-mcp.exe"
+```
+
+</details>
+
+<details>
+<summary>Codex</summary>
+
+Codex has a UI for this, so there's no JSON to paste:
+
+1. Open **Codex → Settings → MCP Servers**
+2. Click **+ Add server**
+3. Choose **STDIO / Local server** (wording varies by version)
+4. Fill in:
+   - **Name:** `ugly`
+   - **Command:** the path shown in UGLy's Settings, e.g.
+     `C:\Users\you\AppData\Local\UGLy\ugly-mcp.exe`
+   - **Arguments:** leave empty
+   - **Working directory:** leave empty
+5. Save and enable it
+
+It should then show as enabled under **Settings → MCP Servers**.
+
+</details>
+
+The path depends on where you installed UGLy, which is why Settings shows the real one rather than
+a guess. The server finds the library database on its own — if yours lives somewhere unusual, point
+`UGLY_DATA_DIR` at the folder containing `ugly.db`.
+
+### What it can do
+
+| Tool | Purpose |
+|---|---|
+| `get_library_stats` | Totals per store, play states, install count, playtime, and the genres and tags actually present |
+| `list_games` | Search and filter by title, genre, tag, platform, play status or installed state |
+| `get_game` | Details for one game |
+| `set_game_status` | Mark a game as playing, completed or dropped, or return it to the backlog |
+
+**It cannot launch or install anything.** Starting programs stays a button you press yourself. The
+only thing it can change is a game's play status, which shows up in the app immediately.
+
+The server talks over stdio and is started by your MCP client, not by UGLy — it reads the same
+local database and sends nothing anywhere.
+
 ## Build from source
 
 Requires [Node.js](https://nodejs.org) (build-time only) and the [Rust toolchain](https://rustup.rs).
@@ -125,7 +218,8 @@ To produce an installer of your own:
 npm run tauri:build
 ```
 
-Output lands in `src-tauri/target/release/bundle/`.
+Output lands in `target/release/bundle/`. That command builds the MCP server first and stages it as
+a sidecar so the installer carries it; to build just that binary, run `npm run build:mcp`.
 
 To work on the UI in a normal browser with sample data (no Tauri, no real library):
 
@@ -143,6 +237,10 @@ VITE_UI_FIXTURE=1 npm run dev --prefix client
   directly from your machine.
 - The Epic and Steam Family imports run in *your* browser using *your* existing session. No
   passwords are entered into UGLy, and no long-lived tokens are stored.
+- **The MCP server is opt-in.** It only runs if you add it to an MCP client's config, and it only
+  ever touches the local database — it has no access to your credentials. Bear in mind that
+  whichever assistant you connect will see your library, so it goes wherever that client's data
+  goes.
 
 ## How it works
 
@@ -153,6 +251,12 @@ VITE_UI_FIXTURE=1 npm run dev --prefix client
 | Storage | SQLite (`rusqlite`) |
 | Credentials | Windows Credential Manager |
 | Imports | A small local HTTP listener on port `43117` that the bookmarklets post to |
+| Tags | Steam's public store endpoints (no API key), plus IGDB via a Twitch app |
+| MCP server | A separate stdio binary (`rmcp`), started by your MCP client |
+
+The Rust code is a Cargo workspace: `crates/core` holds the data layer, `crates/mcp` is the MCP
+server, and `src-tauri` is the desktop app. Core carries no Tauri dependency, which is what lets
+the MCP server link it without dragging in a window.
 
 The shipped app contains no JavaScript runtime — Node is only used to build the frontend, which is
 why the installer is a few megabytes rather than a few hundred.
@@ -165,8 +269,13 @@ why the installer is a few megabytes rather than a few hundred.
   the download entirely.
 - **Epic install** opens the game's store page in the Epic launcher, because Epic exposes no
   install action for a game you don't already own locally.
-- **IGDB matching is by title**, so demos, playtests and bundled tools often won't resolve to a
-  record and simply show no genres or tags.
+- **Metadata matching is by title**, so demos, playtests and bundled tools often won't resolve to
+  a record and simply show no genres or tags.
+- **Epic titles are only matched to Steam on an exact name match**, edition suffixes aside. That
+  is deliberate: Steam's top result for a game it doesn't carry is frequently the sequel, and a
+  wrong match would silently attach another game's tags. Some games are missed as a result.
+- **Steam tags are player-voted**, so a handful of joke tags exist. Only the most-voted ones per
+  game are kept, which filters out nearly all of it.
 
 ## Contributing
 

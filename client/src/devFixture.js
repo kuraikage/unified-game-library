@@ -19,7 +19,10 @@ const statuses = {};
 const SAMPLE_GENRES = ['Adventure', 'Indie', 'Role-playing (RPG)', 'Strategy', 'Shooter'];
 const SAMPLE_TAGS = ['Action', 'Fantasy', 'Science fiction', 'roguelike', 'Open world'];
 
-const sampleGames = Array.from({ length: 60 }, (_, i) => ({
+// Sized to match a real library so performance work is measured against the real thing.
+const SAMPLE_SIZE = Number(import.meta.env.VITE_FIXTURE_SIZE ?? 900);
+
+const sampleGames = Array.from({ length: SAMPLE_SIZE }, (_, i) => ({
   id: `${PLATFORMS[i % 2]}-${1000 + i}`,
   platform: PLATFORMS[i % 2],
   title: `Sample Game ${String(i + 1).padStart(2, '0')}`,
@@ -65,8 +68,15 @@ export const devApi = {
 
   // Simulates a real background pass — progresses over time and fills the cache as it
   // goes, so the status strip behaves exactly as it does against the Rust backend.
-  enrichMetadata: async (titles) => {
-    const pending = titles.filter((t) => !cachedMetadata[slugify(t)]);
+  // Steam tags need no credentials and finish in seconds, so the fixture just no-ops.
+  enrichSteamTags: async () => ({ running: false, total: 0, completed: 0, error: null }),
+  resolveEpicAppids: async () => ({ running: false, total: 0, completed: 0, error: null }),
+  onSteamProgress: async () => () => {},
+  onAppidProgress: async () => () => {},
+
+  enrichMetadata: async () => {
+    const titles = sampleGames.map((g) => g.title);
+    const pending = titles.filter((t) => !cachedMetadata[slugify(t)]?.igdb);
     const total = pending.length;
     let completed = 0;
 
@@ -80,6 +90,14 @@ export const devApi = {
           coverUrl: null,
           notFound: false,
           fetchedAt: Date.now(),
+          // Mirrors the merged shape Rust returns; `igdb` is what drives the auto-enrich
+          // check, so the fixture is wrong without it.
+          igdb: true,
+          steam: false,
+          shortDescription: null,
+          reviewPercent: null,
+          reviewCount: null,
+          releasedAt: null,
         };
       }
       completed = Math.min(total, completed + step);
@@ -110,6 +128,20 @@ export const devApi = {
   installGame: async () => {},
   openExternal: async (url) => window.open(url, '_blank'),
   bookmarkletPort: async () => 43117,
+  getAppVersion: async () => '1.1.0-fixture',
+  getMcpInfo: async () => ({
+    available: true,
+    path: 'C:\\Users\\you\\AppData\\Local\\UGLy\\ugly-mcp.exe',
+    config: JSON.stringify(
+      {
+        mcpServers: {
+          ugly: { command: 'C:\\Users\\you\\AppData\\Local\\UGLy\\ugly-mcp.exe', args: [] },
+        },
+      },
+      null,
+      2
+    ),
+  }),
   onEpicImported: async () => () => {},
   onFamilyImported: async () => () => {},
   onEnrichmentProgress: async (handler) => {

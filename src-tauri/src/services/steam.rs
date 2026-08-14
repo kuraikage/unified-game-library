@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use serde::Deserialize;
 
-use crate::models::Game;
+use ugly_core::models::Game;
 
 const OWNED_GAMES_URL: &str =
     "https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/";

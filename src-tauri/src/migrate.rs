@@ -3,8 +3,8 @@ use std::path::Path;
 use anyhow::Result;
 use serde::Deserialize;
 
-use crate::models::{Game, MetadataEntry};
-use crate::store::Store;
+use ugly_core::models::{Game, MetadataEntry};
+use ugly_core::store::Store;
 
 const MIGRATION_FLAG: &str = "legacy_json_migrated";
 

@@ -7,9 +7,12 @@ import { buildLibraryCsv, downloadCsv } from './exportCsv';
 import SettingsPanel from './components/SettingsPanel';
 import EpicImport from './components/EpicImport';
 import SteamFamilyImport from './components/SteamFamilyImport';
+import McpPanel from './components/McpPanel';
+import ExternalLink from './components/ExternalLink';
 import FilterBar from './components/FilterBar';
 import GameGrid from './components/GameGrid';
 import GameList from './components/GameList';
+import GameDetail from './components/GameDetail';
 import SegmentedControl from './components/SegmentedControl';
 import StatusStrip from './components/StatusStrip';
 import { LibraryIcon, SettingsIcon } from './icons';
@@ -40,6 +43,8 @@ export default function App() {
   const [statuses, setStatuses] = useState({});
   const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState(null);
+  const [detailGame, setDetailGame] = useState(null);
+  const [appVersion, setAppVersion] = useState(null);
   const enrichRequested = useRef(false);
 
   const loadAll = useCallback(async () => {
@@ -84,11 +89,34 @@ export default function App() {
   }, [loadAll]);
 
   // Rust pushes these, so the UI reacts without polling.
+  // Fixed for the life of the process, so it's fetched once and never refreshed.
+  useEffect(() => {
+    api.getAppVersion().then(setAppVersion).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const unlisten = [];
     api.onEnrichmentProgress((job) => {
       setMetadataJob(job);
       if (!job.running) api.getMetadata().then(setMetadata).catch(() => {});
+    }).then((fn) => unlisten.push(fn));
+
+    // The Steam pass gets no progress bar — it's seconds, not minutes — so this only
+    // picks up the tags once it's finished.
+    api.onSteamProgress((job) => {
+      if (job.running) return;
+      if (job.error) {
+        console.warn('Steam tag lookup failed:', job.error);
+        return;
+      }
+      api.getMetadata().then(setMetadata).catch(() => {});
+    }).then((fn) => unlisten.push(fn));
+
+    // Newly resolved appids mean more games can be tagged, so run the (cheap, batched)
+    // tag pass again to pick them up.
+    api.onAppidProgress((job) => {
+      if (job.running) return;
+      api.enrichSteamTags().catch(() => {});
     }).then((fn) => unlisten.push(fn));
 
     api.onEpicImported(() => {
@@ -114,23 +142,40 @@ export default function App() {
     return [...steamGames, ...shared, ...epicGames];
   }, [steamGames, familyGames, epicGames]);
 
-  // Any game with no cached lookup gets fetched automatically. Rust filters to just the
-  // missing ones, so passing the whole list is cheap.
+  // Asked for once per session; Rust decides what actually needs fetching and returns
+  // immediately when nothing does.
+  //
+  // Deliberately NOT gated on "does anything look missing from here?". Rust also re-fetches
+  // rows whose cached shape predates the current tag schema, and those rows look present
+  // from this side — gating on appearance would mean such a pass could never start.
   useEffect(() => {
-    if (loading || !settings.igdbConfigured || metadataJob.running || allGames.length === 0) return;
-    const missing = allGames.filter((g) => !metadata[slugify(g.title)]);
-    if (missing.length === 0) {
-      enrichRequested.current = false;
-      return;
-    }
+    if (loading || !settings.igdbConfigured || allGames.length === 0) return;
     if (enrichRequested.current) return;
     enrichRequested.current = true;
 
     api
-      .enrichMetadata(allGames.map((g) => g.title))
+      .enrichMetadata()
       .then(setMetadataJob)
       .catch((err) => setError(String(err)));
-  }, [loading, settings.igdbConfigured, metadataJob.running, allGames, metadata]);
+  }, [loading, settings.igdbConfigured, allGames.length]);
+
+  // Steam tags are a handful of batched requests for the whole library, so they run with
+  // no progress UI. No credentials needed, which is why this isn't gated on settings the
+  // way the IGDB pass is.
+  //
+  // Keyed on the library size rather than latched to first load, so refreshing Steam or
+  // importing Epic games gets the new titles tagged straight away instead of at next
+  // launch. Rust returns immediately when there is nothing outstanding, so re-asking is
+  // cheap and a running pass can't be started twice.
+  useEffect(() => {
+    if (loading || allGames.length === 0) return;
+
+    // Both return as soon as they start; results arrive on their progress events.
+    api.enrichSteamTags().catch((err) => console.warn('Steam tag lookup failed:', err));
+    // Finds Steam appids for Epic-only games so they get Steam tags too. Slow, cached
+    // permanently, and shrinks to nothing after the first pass.
+    api.resolveEpicAppids().catch((err) => console.warn('Steam appid lookup failed:', err));
+  }, [loading, allGames.length]);
 
   async function handleRefreshSteam() {
     setRefreshing(true);
@@ -154,7 +199,7 @@ export default function App() {
     setError(null);
     enrichRequested.current = false;
     try {
-      setMetadataJob(await api.enrichMetadata(allGames.map((g) => g.title)));
+      setMetadataJob(await api.enrichMetadata());
     } catch (err) {
       setError(String(err));
     }
@@ -188,7 +233,7 @@ export default function App() {
 
   // Optimistic update: the button reflects the new state immediately and Rust returns the
   // authoritative map, so a rejected value corrects itself.
-  async function handleStatusChange(game, next) {
+  const handleStatusChange = useCallback(async (game, next) => {
     const slug = slugify(game.title);
     setStatuses((prev) => {
       const copy = { ...prev };
@@ -202,14 +247,16 @@ export default function App() {
       setError(String(err));
       setStatuses(await api.getStatuses().catch(() => ({})));
     }
-  }
+  }, []);
 
   const installedCount = useMemo(
     () => allGames.filter((g) => installed[g.id]).length,
     [allGames, installed]
   );
 
-  async function handleLaunch(game) {
+  // These are passed to every card, so they must keep a stable identity or memo()
+  // on GameCard would never prevent a re-render.
+  const handleLaunch = useCallback(async (game) => {
     setNotice(null);
     try {
       await api.launchGame(game.id);
@@ -218,9 +265,9 @@ export default function App() {
     } catch (err) {
       setError(String(err));
     }
-  }
+  }, []);
 
-  async function handleInstall(game) {
+  const handleInstall = useCallback(async (game) => {
     setNotice(null);
     try {
       await api.installGame(game);
@@ -233,15 +280,17 @@ export default function App() {
     } catch (err) {
       setError(String(err));
     }
-  }
+  }, []);
 
   function handleExportCsv() {
     const stamp = new Date().toISOString().slice(0, 10);
     downloadCsv(`ugly-library-${stamp}.csv`, buildLibraryCsv(games, metadata, statuses, installed));
   }
 
+  // Counts games IGDB has never resolved, which is what the "fetch genres & art" button
+  // acts on — Steam tags don't make a game enriched for that purpose.
   const missingMetadataCount = useMemo(
-    () => allGames.filter((g) => !metadata[slugify(g.title)]).length,
+    () => allGames.filter((g) => !metadata[slugify(g.title)]?.igdb).length,
     [allGames, metadata]
   );
 
@@ -351,6 +400,18 @@ export default function App() {
                   setView('library');
                 }}
               />
+
+              <McpPanel />
+
+              {/* Spans the columns so it reads as a footer for the whole screen rather
+                  than the tail of whichever column it landed in. */}
+              <p className="settings-version">
+                UGLy {appVersion ?? '…'}
+                <span className="settings-version-sep">·</span>
+                <ExternalLink href="https://github.com/kuraikage/unified-game-library">
+                  github.com/kuraikage/unified-game-library
+                </ExternalLink>
+              </p>
             </div>
           )}
 
@@ -379,9 +440,10 @@ export default function App() {
                 onEnrich={handleEnrichNow}
                 onDismissError={() => setMetadataJob({ ...metadataJob, error: null })}
               />
+              {/* No `key` here on purpose: forcing a remount threw away and rebuilt
+                  every card, which is the bulk of the cost when switching views. */}
               {viewMode === 'grid' ? (
                 <GameGrid
-                  key="grid"
                   games={games}
                   metadata={metadata}
                   installed={installed}
@@ -389,10 +451,10 @@ export default function App() {
                   onLaunch={handleLaunch}
                   onInstall={handleInstall}
                   onStatusChange={handleStatusChange}
+                  onOpen={setDetailGame}
                 />
               ) : (
                 <GameList
-                  key="list"
                   games={games}
                   metadata={metadata}
                   installed={installed}
@@ -400,11 +462,28 @@ export default function App() {
                   onLaunch={handleLaunch}
                   onInstall={handleInstall}
                   onStatusChange={handleStatusChange}
+                  onOpen={setDetailGame}
                 />
               )}
             </>
           )}
         </main>
+      )}
+
+      {detailGame && (
+        <GameDetail
+          // Remount per game so per-game state (a failed hero image) and the mount-only
+          // focus effect both reset when you open a different card.
+          key={detailGame.id}
+          game={detailGame}
+          entry={metadata[slugify(detailGame.title)]}
+          installed={installed[detailGame.id] ?? null}
+          status={statuses[slugify(detailGame.title)]?.status ?? null}
+          onClose={() => setDetailGame(null)}
+          onLaunch={handleLaunch}
+          onInstall={handleInstall}
+          onStatusChange={handleStatusChange}
+        />
       )}
     </div>
   );

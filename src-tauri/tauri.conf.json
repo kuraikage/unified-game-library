@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "UGLy",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "identifier": "com.ugly.library",
   "build": {
     "frontendDist": "../client/dist",
@@ -48,6 +48,7 @@
     "active": true,
     "targets": ["msi", "nsis"],
     "publisher": "UGLy",
+    "externalBin": ["binaries/ugly-mcp"],
     "shortDescription": "All your games. One place.",
     "longDescription": "UGLy (Unified Game Library) brings your Steam and Epic Games libraries together in one searchable place, enriched with genres, tags and artwork from IGDB.",
     "icon": [

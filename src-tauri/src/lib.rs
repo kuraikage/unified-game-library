@@ -1,22 +1,22 @@
 mod bookmarklet;
 mod commands;
 mod credentials;
-mod installed;
+mod jobs;
 mod launcher;
 mod migrate;
-mod models;
 mod services;
-mod store;
 
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+// models, store and installed live in ugly-core, shared with the MCP server.
+use ugly_core::store;
+
+use std::sync::Arc;
 
 use tauri::Manager;
 
 use commands::AppState;
 use credentials::Secret;
-use models::EnrichmentJob;
-use store::Store;
+use jobs::JobSlot;
+use ugly_core::store::Store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -79,8 +79,9 @@ pub fn run() {
 
             app.manage(AppState {
                 store,
-                job: Mutex::new(EnrichmentJob::default()),
-                job_running: AtomicBool::new(false),
+                igdb_job: Arc::new(JobSlot::new("enrichment-progress")),
+                steam_job: Arc::new(JobSlot::new("steam-progress")),
+                appid_job: Arc::new(JobSlot::new("appid-progress")),
             });
 
             Ok(())
@@ -97,6 +98,8 @@ pub fn run() {
             commands::get_metadata,
             commands::get_enrichment_job,
             commands::enrich_metadata,
+            commands::enrich_steam_tags,
+            commands::resolve_epic_appids,
             commands::get_statuses,
             commands::set_game_status,
             commands::get_installed,
@@ -104,6 +107,8 @@ pub fn run() {
             commands::install_game,
             commands::open_external,
             commands::bookmarklet_port,
+            commands::get_mcp_info,
+            commands::get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

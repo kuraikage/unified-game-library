@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter};
 use tower_http::cors::{Any, CorsLayer};
 
 use crate::services::epic;
-use crate::store::Store;
+use ugly_core::store::Store;
 
 /// Fixed so the bookmarklet's URL stays valid across restarts. Kept off the common
 /// dev-server ports to avoid clashing with anything else the user runs.

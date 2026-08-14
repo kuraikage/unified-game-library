@@ -1,20 +1,26 @@
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::credentials::{self, Secret};
-use crate::models::{
-    slugify, EnrichmentJob, EpicLibrary, Game, GameStatus, MetadataEntry, SettingsView, StatusEntry,
+use crate::jobs::JobSlot;
+use crate::services::{epic, igdb, steam, steam_search, steam_tags};
+use ugly_core::metadata;
+use ugly_core::models::{
+    self, slugify, EnrichmentJob, EpicLibrary, Game, GameStatus, MetadataEntry, SettingsView,
+    StatusEntry,
 };
-use crate::services::{epic, igdb, steam};
-use crate::store::Store;
+use ugly_core::store::Store;
 
 pub struct AppState {
     pub store: Arc<Store>,
-    pub job: Mutex<EnrichmentJob>,
-    pub job_running: AtomicBool,
+    /// One slot per source: they have different credentials, runtimes and failure modes.
+    pub igdb_job: Arc<JobSlot>,
+    pub steam_job: Arc<JobSlot>,
+    /// Epic title -> Steam appid. One request per title, so it must not hold up the
+    /// batched tag fetch.
+    pub appid_job: Arc<JobSlot>,
 }
 
 type CmdResult<T> = Result<T, String>;
@@ -130,28 +136,56 @@ pub fn import_epic_library(state: State<'_, AppState>, data: String) -> CmdResul
 
 // ---------- metadata ----------
 
+/// Both sources merged, keyed by slug. Serializes to the same JS object shape as before,
+/// with the addition of `igdb`/`steam` provenance flags — see the note in `App.jsx` about
+/// why the enrichment check has to read those rather than test for presence.
 #[tauri::command]
 pub fn get_metadata(
     state: State<'_, AppState>,
-) -> CmdResult<serde_json::Map<String, serde_json::Value>> {
+) -> CmdResult<std::collections::HashMap<String, ugly_core::metadata::MergedMetadata>> {
     state.store.all_metadata().map_err(to_err)
 }
 
 #[tauri::command]
 pub fn get_enrichment_job(state: State<'_, AppState>) -> CmdResult<EnrichmentJob> {
-    Ok(state.job.lock().unwrap().clone())
+    Ok(state.igdb_job.snapshot())
 }
 
-/// Kicks off a background pass over any titles with no cached lookup. Returns immediately;
+/// Every library title, deduplicated by slug, newest source winning.
+///
+/// Derived here rather than passed in from the webview: the caller's list was always just
+/// a round trip of what the store already held, and the appid a Steam entry carries is
+/// thrown away by the time it reaches JS.
+fn library_titles(store: &Store) -> Result<Vec<String>, String> {
+    let mut seen = HashSet::new();
+    let mut titles = Vec::new();
+    for game in store
+        .steam_games()
+        .map_err(to_err)?
+        .into_iter()
+        .chain(store.family_games().map_err(to_err)?)
+        .chain(store.epic_library().map_err(to_err)?.games)
+    {
+        let slug = slugify(&game.title);
+        if !slug.is_empty() && seen.insert(slug) {
+            titles.push(game.title);
+        }
+    }
+    Ok(titles)
+}
+
+/// Kicks off a background IGDB pass over anything that needs one. Returns immediately;
 /// progress is polled via `get_enrichment_job` and pushed via the `enrichment-progress` event.
+///
+/// `force` re-fetches everything, including rows already cached.
 #[tauri::command]
 pub fn enrich_metadata(
     app: AppHandle,
     state: State<'_, AppState>,
-    titles: Vec<String>,
+    force: Option<bool>,
 ) -> CmdResult<EnrichmentJob> {
-    if state.job_running.load(Ordering::SeqCst) {
-        return Ok(state.job.lock().unwrap().clone());
+    if state.igdb_job.is_running() {
+        return Ok(state.igdb_job.snapshot());
     }
 
     let (Some(client_id), Some(client_secret)) = (
@@ -161,82 +195,305 @@ pub fn enrich_metadata(
         return Err("IGDB is not configured yet.".into());
     };
 
-    let known = state.store.known_metadata_slugs().map_err(to_err)?;
-    let mut seen = HashSet::new();
-    let pending: Vec<String> = titles
+    let force = force.unwrap_or(false);
+    let now = igdb::now_ms();
+    let refresh_from = igdb::refresh_marker(&state.store, now).map_err(to_err)?;
+    let stamps = state.store.igdb_metadata_stamps().map_err(to_err)?;
+
+    let pending: Vec<String> = library_titles(&state.store)?
         .into_iter()
-        .filter(|t| !t.trim().is_empty())
-        .filter(|t| {
-            let slug = slugify(t);
-            !slug.is_empty() && !known.contains(&slug) && seen.insert(slug)
-        })
+        .filter(|title| metadata::needs_igdb(stamps.get(&slugify(title)), now, refresh_from, force))
         .collect();
 
     if pending.is_empty() {
-        return Ok(state.job.lock().unwrap().clone());
+        // Nothing left to do means the current tag schema is fully applied.
+        let _ = igdb::clear_refresh_marker(&state.store);
+        return Ok(state.igdb_job.snapshot());
     }
 
-    {
-        let mut job = state.job.lock().unwrap();
-        job.running = true;
-        job.total = pending.len();
-        job.completed = 0;
-        job.error = None;
+    if !state.igdb_job.try_start(pending.len()) {
+        return Ok(state.igdb_job.snapshot());
     }
-    state.job_running.store(true, Ordering::SeqCst);
 
     let store = state.store.clone();
+    let job = state.igdb_job.clone();
     tauri::async_runtime::spawn(async move {
+        let mut consecutive_failures = 0;
+
         for title in pending {
-            let result = igdb::lookup_game(&client_id, &client_secret, &title).await;
-            let entry = match result {
-                Ok(Some(entry)) => entry,
-                Ok(None) => MetadataEntry {
-                    not_found: true,
-                    fetched_at: igdb::now_ms(),
-                    ..Default::default()
-                },
-                Err(err) => {
-                    if let Some(state) = app.try_state::<AppState>() {
-                        let mut job = state.job.lock().unwrap();
-                        job.error = Some(err.to_string());
-                        job.running = false;
-                        state.job_running.store(false, Ordering::SeqCst);
-                        let _ = app.emit("enrichment-progress", job.clone());
+            let entry = match igdb::lookup_game(&client_id, &client_secret, &title).await {
+                Ok(Some(entry)) => {
+                    consecutive_failures = 0;
+                    entry
+                }
+                Ok(None) => {
+                    consecutive_failures = 0;
+                    MetadataEntry {
+                        not_found: true,
+                        fetched_at: igdb::now_ms(),
+                        ..Default::default()
                     }
+                }
+                // Bad credentials will fail identically for every remaining title, so
+                // stop rather than burn hundreds of requests and get the IP throttled.
+                Err(igdb::LookupError::Auth(message)) => {
+                    job.finish(&app, Some(message));
                     return;
+                }
+                // One title failing is not a reason to abandon the other hundreds — the
+                // old behaviour discarded the whole pass on the first transient error.
+                Err(err) => {
+                    consecutive_failures += 1;
+                    log::warn!("IGDB lookup failed for {title}: {err}");
+                    if consecutive_failures >= 10 {
+                        job.finish(&app, Some(err.to_string()));
+                        return;
+                    }
+                    job.advance(&app, 1);
+                    tokio::time::sleep(err.backoff()).await;
+                    continue;
                 }
             };
 
             if let Err(err) = store.save_metadata(&slugify(&title), &entry) {
                 log::error!("Could not cache metadata for {title}: {err}");
             }
-
-            if let Some(state) = app.try_state::<AppState>() {
-                let snapshot = {
-                    let mut job = state.job.lock().unwrap();
-                    job.completed += 1;
-                    job.clone()
-                };
-                let _ = app.emit("enrichment-progress", snapshot);
-            }
+            job.advance(&app, 1);
 
             // IGDB's free tier allows 4 requests/second; stay comfortably under it.
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         }
 
-        if let Some(state) = app.try_state::<AppState>() {
-            let snapshot = {
-                let mut job = state.job.lock().unwrap();
-                job.running = false;
-                job.clone()
-            };
-            state.job_running.store(false, Ordering::SeqCst);
-            let _ = app.emit("enrichment-progress", snapshot);
+        // A clean pass means every row now matches the current tag schema.
+        if let Err(err) = igdb::finish_refresh(&store) {
+            log::warn!("Could not clear the IGDB refresh marker: {err}");
         }
+        job.finish(&app, None);
     });
 
-    Ok(state.job.lock().unwrap().clone())
+    Ok(state.igdb_job.snapshot())
+}
+
+// ---------- steam tags ----------
+
+/// Fetches Steam user tags for every game with a known appid.
+///
+/// Batched 100 at a time, so the whole library is a handful of requests and a couple of
+/// seconds — unlike the IGDB pass, which is one request per game.
+#[tauri::command]
+pub fn enrich_steam_tags(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    force: Option<bool>,
+) -> CmdResult<EnrichmentJob> {
+    if state.steam_job.is_running() {
+        return Ok(state.steam_job.snapshot());
+    }
+
+    let force = force.unwrap_or(false);
+    let now = igdb::now_ms();
+    let stamps = state.store.steam_metadata_stamps().map_err(to_err)?;
+
+    // slug -> appid, so the result can be stored under the same key everything else uses.
+    let targets: Vec<(String, String)> = steam_appid_targets(&state.store)?
+        .into_iter()
+        .filter(|(slug, _)| metadata::needs_steam(stamps.get(slug), now, force))
+        .collect();
+
+    if targets.is_empty() {
+        return Ok(state.steam_job.snapshot());
+    }
+    if !state.steam_job.try_start(targets.len()) {
+        return Ok(state.steam_job.snapshot());
+    }
+
+    let store = state.store.clone();
+    let job = state.steam_job.clone();
+    tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::new();
+
+        let vocabulary = match steam_tags::fetch_tag_vocabulary(&client).await {
+            Ok(vocabulary) => {
+                log::info!("Steam tag vocabulary: {} names", vocabulary.len());
+                vocabulary
+            }
+            // Without the id->name map every tag would be a bare number, so there is
+            // nothing useful to do with the batches.
+            Err(err) => {
+                log::error!("Could not load the Steam tag vocabulary: {err}");
+                job.finish(&app, Some(format!("Steam tag list unavailable: {err}")));
+                return;
+            }
+        };
+
+        let mut consecutive_failures = 0;
+        let mut matched = 0usize;
+
+        for chunk in targets.chunks(steam_tags::BATCH_SIZE) {
+            let appids: Vec<String> = chunk.iter().map(|(_, appid)| appid.clone()).collect();
+
+            match steam_tags::fetch_batch(&client, &vocabulary, &appids, now).await {
+                Ok(found) => {
+                    consecutive_failures = 0;
+                    // Keyed by the appid Steam echoed back, never by position in the
+                    // request — a shifted response would attach the wrong game's tags.
+                    let rows: Vec<(String, ugly_core::metadata::SteamMetadata)> = chunk
+                        .iter()
+                        .filter_map(|(slug, appid)| {
+                            found.get(appid).map(|entry| (slug.clone(), entry.clone()))
+                        })
+                        .collect();
+                    matched += rows.iter().filter(|(_, e)| !e.not_found).count();
+
+                    if let Err(err) = store.save_steam_metadata(&rows) {
+                        log::error!("Could not save Steam tags: {err}");
+                    }
+                }
+                // One bad batch must not lose the rest, but repeated failures are an
+                // outage and burning the remaining requests helps nobody.
+                Err(err) => {
+                    consecutive_failures += 1;
+                    log::warn!("Steam tag batch failed: {err}");
+                    if consecutive_failures >= 3 {
+                        job.finish(&app, Some(format!("Steam tag lookup failed: {err}")));
+                        return;
+                    }
+                }
+            }
+
+            job.advance(&app, chunk.len());
+        }
+
+        log::info!("Steam tags: {matched} of {} games matched", targets.len());
+        job.finish(&app, None);
+    });
+
+    Ok(state.steam_job.snapshot())
+}
+
+/// Searches the Steam store for the Epic-only games, so they can get Steam tags too.
+///
+/// Slow by comparison — one request per title with a deliberate gap — which is why it runs
+/// in its own slot rather than holding up the batched tag fetch. Results are cached
+/// permanently, misses included, so this shrinks to nothing after the first pass.
+#[tauri::command]
+pub fn resolve_epic_appids(app: AppHandle, state: State<'_, AppState>) -> CmdResult<EnrichmentJob> {
+    if state.appid_job.is_running() {
+        return Ok(state.appid_job.snapshot());
+    }
+
+    let resolved = state.store.resolved_appids().map_err(to_err)?;
+    let mut seen = HashSet::new();
+    // Only games we don't already own on Steam: an owned copy carries its appid directly.
+    let owned: HashSet<String> = state
+        .store
+        .steam_games()
+        .map_err(to_err)?
+        .into_iter()
+        .chain(state.store.family_games().map_err(to_err)?)
+        .map(|g| slugify(&g.title))
+        .collect();
+
+    let pending: Vec<String> = state
+        .store
+        .epic_library()
+        .map_err(to_err)?
+        .games
+        .into_iter()
+        .filter(|game| {
+            let slug = slugify(&game.title);
+            !slug.is_empty()
+                && !owned.contains(&slug)
+                && !resolved.contains_key(&slug)
+                && seen.insert(slug)
+        })
+        .map(|game| game.title)
+        .collect();
+
+    if pending.is_empty() || !state.appid_job.try_start(pending.len()) {
+        return Ok(state.appid_job.snapshot());
+    }
+
+    let store = state.store.clone();
+    let job = state.appid_job.clone();
+    tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::new();
+        let mut batch: Vec<(String, Option<String>)> = Vec::new();
+        let mut matched = 0usize;
+
+        for title in &pending {
+            match steam_search::resolve_appid(&client, title).await {
+                Ok(Ok(appid)) => {
+                    if appid.is_some() {
+                        matched += 1;
+                    }
+                    // A miss is cached too, so it is never searched again.
+                    batch.push((slugify(title), appid));
+                }
+                // Steam asked us to back off. Stop; what's cached persists and the rest
+                // is picked up next launch.
+                Ok(Err(_)) => {
+                    log::info!("Steam store search rate-limited; resuming next launch");
+                    break;
+                }
+                Err(err) => {
+                    log::warn!("Steam store search failed for {title}: {err}");
+                }
+            }
+
+            if batch.len() >= 25 {
+                if let Err(err) = store.save_appid_lookup(&batch, igdb::now_ms()) {
+                    log::error!("Could not save Steam appid lookups: {err}");
+                }
+                batch.clear();
+                job.advance(&app, 25);
+            }
+
+            // The store search is rate-limited harder than api.steampowered.com.
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        }
+
+        if !batch.is_empty() {
+            if let Err(err) = store.save_appid_lookup(&batch, igdb::now_ms()) {
+                log::error!("Could not save Steam appid lookups: {err}");
+            }
+        }
+
+        log::info!(
+            "Steam appid lookup: {matched} of {} Epic titles found on Steam",
+            pending.len()
+        );
+        job.finish(&app, None);
+    });
+
+    Ok(state.appid_job.snapshot())
+}
+
+/// Every library game that has a Steam appid, keyed by slug.
+///
+/// Sources are inserted lowest-priority first so an owned copy wins — the same precedence
+/// `library::merge` uses, which keeps the answer stable when a family-shared entry and an
+/// Epic-resolved one disagree about which appid a title maps to.
+fn steam_appid_targets(store: &Store) -> Result<HashMap<String, String>, String> {
+    let mut targets: HashMap<String, String> = HashMap::new();
+
+    for (slug, appid) in store.resolved_appids().map_err(to_err)? {
+        if let Some(appid) = appid {
+            targets.insert(slug, appid);
+        }
+    }
+    for game in store
+        .family_games()
+        .map_err(to_err)?
+        .into_iter()
+        .chain(store.steam_games().map_err(to_err)?)
+    {
+        if let Some(appid) = models::steam_appid(&game.id) {
+            targets.insert(slugify(&game.title), appid.to_string());
+        }
+    }
+
+    Ok(targets)
 }
 
 // ---------- play status ----------
@@ -274,6 +531,66 @@ pub fn set_game_status(
     state.store.all_statuses().map_err(to_err)
 }
 
+/// The version shown in Settings.
+///
+/// Read from Tauri's package info rather than `CARGO_PKG_VERSION`, so it is the same
+/// number the installer and the Windows "Apps & features" entry report.
+#[tauri::command]
+pub fn get_app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+// ---------- mcp server ----------
+
+/// Where the bundled MCP server lives, plus a config snippet the user can paste straight
+/// into an MCP client.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpInfo {
+    /// False when running from a dev build with no release binary staged yet, in which case
+    /// the UI explains that instead of handing over a path that doesn't work.
+    pub available: bool,
+    pub path: String,
+    /// Ready-to-paste JSON for `claude_desktop_config.json` and friends.
+    pub config: String,
+}
+
+/// Resolves the sidecar next to the running executable, which is where Tauri puts external
+/// binaries in both a dev run and an installed build. Computed rather than assumed, because
+/// the installer lets the user choose where the app goes.
+fn mcp_binary_path() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let beside = exe
+        .parent()?
+        .join(format!("ugly-mcp{}", std::env::consts::EXE_SUFFIX));
+    beside.exists().then_some(beside)
+}
+
+#[tauri::command]
+pub fn get_mcp_info() -> McpInfo {
+    let Some(path) = mcp_binary_path() else {
+        return McpInfo {
+            available: false,
+            path: String::new(),
+            config: String::new(),
+        };
+    };
+
+    let path = path.to_string_lossy().to_string();
+    let config = serde_json::json!({
+        "mcpServers": {
+            "ugly": { "command": path, "args": [] }
+        }
+    });
+
+    McpInfo {
+        available: true,
+        path,
+        // Pretty-printed because it is shown in a code block and pasted into a config file.
+        config: serde_json::to_string_pretty(&config).unwrap_or_default(),
+    }
+}
+
 // ---------- installed games ----------
 
 /// Scans Steam's .acf manifests and Epic's .item manifests and reports which of our
@@ -281,22 +598,22 @@ pub fn set_game_status(
 #[tauri::command]
 pub fn get_installed(
     state: State<'_, AppState>,
-) -> CmdResult<std::collections::HashMap<String, crate::installed::InstalledGame>> {
-    let mut ids: Vec<(String, String, String)> = Vec::new();
-    for game in state.store.steam_games().map_err(to_err)? {
-        ids.push((game.id, game.platform, game.title));
-    }
-    for game in state.store.epic_library().map_err(to_err)?.games {
-        ids.push((game.id, game.platform, game.title));
-    }
+) -> CmdResult<std::collections::HashMap<String, ugly_core::installed::InstalledGame>> {
+    // Merged rather than per-table, so a family-shared game that is installed is reported
+    // too — the same list the UI renders, from the same helper the MCP server uses.
+    let games = ugly_core::library::merge(
+        state.store.steam_games().map_err(to_err)?,
+        state.store.family_games().map_err(to_err)?,
+        state.store.epic_library().map_err(to_err)?.games,
+    );
 
-    let found = crate::installed::detect(&ids);
+    let found = ugly_core::library::installed_map(&games);
     let steam = found.values().filter(|g| g.platform == "steam").count();
     let epic = found.values().filter(|g| g.platform == "epic").count();
     log::info!(
         "Installed scan: {} matched ({steam} Steam, {epic} Epic) of {} library entries",
         found.len(),
-        ids.len()
+        games.len()
     );
     Ok(found)
 }

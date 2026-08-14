@@ -31,6 +31,7 @@ export default function GameList({
   onLaunch,
   onInstall,
   onStatusChange,
+  onOpen,
 }) {
   if (games.length === 0) {
     return <p className="empty">No games match your filters yet.</p>;
@@ -60,7 +61,21 @@ export default function GameList({
             const status = statuses[slug]?.status ?? null;
             const meta = statusMeta(status);
             return (
-              <tr key={game.id}>
+              // Same behaviour as a card: the row opens the detail panel, and the
+              // controls inside it stop their own clicks so they never also open it.
+              <tr
+                key={game.id}
+                className="game-row"
+                tabIndex={0}
+                aria-label={`${game.title} — details`}
+                onClick={() => onOpen(game)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpen(game);
+                  }
+                }}
+              >
                 <td className="list-cover">
                   {cover ? (
                     <img src={cover} alt="" loading="lazy" onError={(e) => (e.target.style.display = 'none')} />
@@ -116,7 +131,10 @@ export default function GameList({
                   <button
                     type="button"
                     className={`action-btn compact${isInstalled ? ' play' : ''}`}
-                    onClick={() => (isInstalled ? onLaunch(game) : onInstall(game))}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      isInstalled ? onLaunch(game) : onInstall(game);
+                    }}
                   >
                     {isInstalled ? <PlayIcon /> : <InstallIcon />}
                     <span>
