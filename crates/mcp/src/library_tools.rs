@@ -240,8 +240,58 @@ fn parse_status_filter(value: &str) -> Result<Option<GameStatus>, ErrorData> {
     })
 }
 
-fn contains_ignore_case(haystack: &[String], needle: &str) -> bool {
-    haystack.iter().any(|v| v.eq_ignore_ascii_case(needle))
+/// Reduces a label to just its letters and digits.
+///
+/// The two sources spell the same concept differently — Steam writes `Souls-like`, IGDB
+/// writes `soulslike` — and a caller will type whichever comes to mind. Comparing on this
+/// makes all three forms one tag. Without it, asking for `soulslike` returned 6 games out
+/// of the 35 that qualify, which reads as a real answer rather than a near miss.
+fn condense(label: &str) -> String {
+    label
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+fn contains_label(haystack: &[String], needle: &str) -> bool {
+    let needle = condense(needle);
+    haystack.iter().any(|v| condense(v) == needle)
+}
+
+/// Length of the longest shared opening run of two strings.
+fn common_prefix(a: &str, b: &str) -> usize {
+    a.bytes().zip(b.bytes()).take_while(|(x, y)| x == y).count()
+}
+
+/// Labels close enough to what the caller asked for to be worth suggesting.
+///
+/// Substring alone misses the common cases — `roguelite` for `Roguelike`, `soulsborne`
+/// for `Souls-like`, or a plain typo — because a difference in the middle breaks it. A
+/// shared opening run catches all three without needing edit distance.
+fn nearby_labels<'a>(
+    games: &'a [LibraryGame],
+    pick: fn(&'a LibraryGame) -> &'a [String],
+    needle: &str,
+) -> Vec<String> {
+    const MIN_SHARED_PREFIX: usize = 5;
+    let needle = condense(needle);
+    let mut found: Vec<String> = Vec::new();
+
+    for game in games {
+        for label in pick(game) {
+            let c = condense(label);
+            let close = c.contains(&needle)
+                || needle.contains(&c)
+                || common_prefix(&c, &needle) >= MIN_SHARED_PREFIX.min(needle.len());
+            if close && !found.iter().any(|f| condense(f) == c) {
+                found.push(label.clone());
+            }
+        }
+    }
+    found.sort();
+    found.truncate(8);
+    found
 }
 
 /// Applies every filter in [`ListGamesArgs`], combining them with AND.
@@ -264,6 +314,34 @@ fn select<'a>(
     let installed_only = args.installed_only.unwrap_or(false);
     let search = args.search.as_deref().map(str::to_lowercase);
 
+    // A tag or genre nothing in the library uses almost always means the caller guessed
+    // at the wording. Saying so, with what does exist, is far more useful than an empty
+    // result — which reads as "you own none of these" and gets reported as fact.
+    for (label, value, pick) in [
+        ("tag", args.tag.as_deref(), (|g: &LibraryGame| g.tags.as_slice()) as fn(&LibraryGame) -> &[String]),
+        ("genre", args.genre.as_deref(), |g: &LibraryGame| g.genres.as_slice()),
+    ] {
+        let Some(value) = value else { continue };
+        if games.iter().any(|g| contains_label(pick(g), value)) {
+            continue;
+        }
+        let nearby = nearby_labels(games, pick, value);
+        return Err(invalid(if nearby.is_empty() {
+            format!(
+                "No game is tagged '{value}', and nothing similar exists either. Tags are \
+                 incomplete, so this is not evidence the user owns no such games — use \
+                 list_all_games and judge by title instead."
+            )
+        } else {
+            format!(
+                "No {label} exactly '{value}'. Did you mean: {}? Note tags are incomplete \
+                 either way — list_all_games and your own knowledge will find games these \
+                 filters miss.",
+                nearby.join(", ")
+            )
+        }));
+    }
+
     Ok(games
         .iter()
         .filter(|g| {
@@ -283,12 +361,12 @@ fn select<'a>(
                 return false;
             }
             if let Some(genre) = args.genre.as_deref() {
-                if !contains_ignore_case(&g.genres, genre) {
+                if !contains_label(&g.genres, genre) {
                     return false;
                 }
             }
             if let Some(tag) = args.tag.as_deref() {
-                if !contains_ignore_case(&g.tags, tag) {
+                if !contains_label(&g.tags, tag) {
                     return false;
                 }
             }
@@ -541,13 +619,21 @@ impl ServerHandler for LibraryTools {
                  neither source matched. A game not carrying a tag is NOT evidence it doesn't \
                  qualify — Dark Souls III carried no 'soulslike' tag at all until recently. \
                  So a tag filter returning few results means the tagging is thin, not that the \
-                 library is. Never present a tag-filtered list as complete.\n\n\
+                 library is.\n\n\
                  For questions about what a game IS rather than how it happens to be labelled — \
-                 'what soulslike should I play', 'something cosy', 'a short one' — prefer \
-                 list_all_games and apply what you already know about the titles you see. It \
-                 returns the entire library cheaply and is the only approach that doesn't \
-                 inherit the gaps in the tag data. Use list_games when you want detail, or when \
-                 a filter is genuinely reliable (platform, play status, installed).\n\n\
+                 'what soulslike should I play', 'something cosy', 'a short one' — START with \
+                 list_all_games and read EVERY title, judging each by what you know of that \
+                 game. It deliberately returns no tags: the whole library arrives in one cheap \
+                 response so you can classify it yourself rather than inherit the gaps in the \
+                 tag data. Skimming for names you recognise finds a fraction of what qualifies \
+                 and is the single most common way to get this wrong.\n\n\
+                 Only afterwards, run list_games with a tag filter as a backstop, and add \
+                 anything it turns up that you passed over — useful mainly for obscure titles \
+                 you may not know. Answer from the union, never from the tag filter alone.\n\n\
+                 A partial pass is never complete. If you have not read the full list, say \
+                 'here are some' rather than implying you covered the library, and offer to go \
+                 through it properly. Claiming completeness you have not earned is worse than \
+                 a short answer.\n\n\
                  Games with no play status are the backlog, which is usually what to recommend \
                  from. 'installed' means it is ready to play right now on this PC. reviewPercent \
                  is the share of Steam reviews that are positive; genres come only from IGDB.\n\n\
@@ -631,6 +717,22 @@ mod tests {
             })
             .unwrap(),
         );
+    }
+
+    #[test]
+    fn the_two_sources_spellings_of_one_tag_all_match() {
+        // Steam writes "Souls-like", IGDB writes "soulslike", a caller may type either or
+        // "souls like". Before this, asking for "soulslike" returned 6 of the 35 games
+        // that qualify — an answer wrong enough to be reported as fact.
+        let steam = vec!["Souls-like".to_string()];
+        let igdb = vec!["soulslike".to_string()];
+        for spelling in ["Souls-like", "soulslike", "souls like", "SOULS LIKE"] {
+            assert!(contains_label(&steam, spelling), "steam vs {spelling}");
+            assert!(contains_label(&igdb, spelling), "igdb vs {spelling}");
+        }
+        // Still distinguishes genuinely different tags.
+        assert!(!contains_label(&steam, "roguelike"));
+        assert!(!contains_label(&["Action RPG".to_string()], "Action"));
     }
 
     #[test]
