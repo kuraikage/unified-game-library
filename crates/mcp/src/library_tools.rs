@@ -86,6 +86,10 @@ pub struct ListGamesResult {
 
 /// The wire shape of a game. Mirrors [`LibraryGame`] minus the fields an assistant has no
 /// use for, because every field is repeated for hundreds of rows.
+///
+/// Nothing here may use `skip_serializing_if` on a non-`Option` field: the schema derive
+/// still marks such fields required, and a client that validates structured output against
+/// it rejects the entire response. See the test at the bottom of this file.
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryGameView {
@@ -93,15 +97,10 @@ pub struct LibraryGameView {
     pub slug: String,
     pub platform: String,
     pub status: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub playtime_hours: Option<f64>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub installed: bool,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub shared: bool,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub genres: Vec<String>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub tags: Vec<String>,
 }
 
@@ -418,6 +417,81 @@ impl LibraryTools {
             status: status.map(|s| s.as_str().to_string()),
             message,
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Asserts a serialized value carries every property its own generated schema marks as
+    /// required. MCP clients validate structured output against that schema and reject the
+    /// whole response when a field is missing, so a `skip_serializing_if` on a non-`Option`
+    /// field silently breaks the tool for exactly the rows that trip the skip condition.
+    /// A raw stdio probe does not validate, so this cannot be caught by hand-testing.
+    fn assert_required_fields_present(schema: schemars::Schema, value: serde_json::Value) {
+        let required = schema
+            .as_value()
+            .get("required")
+            .and_then(|r| r.as_array())
+            .cloned()
+            .unwrap_or_default();
+        assert!(!required.is_empty(), "expected the schema to require something");
+
+        let object = value.as_object().expect("expected a JSON object");
+        for field in required {
+            let name = field.as_str().unwrap();
+            assert!(
+                object.contains_key(name),
+                "`{name}` is required by the schema but was omitted when serializing"
+            );
+        }
+    }
+
+    /// The worst case is a game with nothing set: no status, no playtime, no genres or tags,
+    /// not installed and not shared.
+    #[test]
+    fn an_empty_game_row_still_matches_its_schema() {
+        let bare = LibraryGame {
+            id: "steam-1".into(),
+            slug: "a-game".into(),
+            title: "A Game".into(),
+            platform: "steam".into(),
+            shared: false,
+            installed: false,
+            playtime_minutes: None,
+            status: None,
+            completed_at: None,
+            genres: Vec::new(),
+            tags: Vec::new(),
+        };
+
+        assert_required_fields_present(
+            schemars::schema_for!(LibraryGameView),
+            serde_json::to_value(LibraryGameView::from(&bare)).unwrap(),
+        );
+    }
+
+    #[test]
+    fn an_empty_result_page_still_matches_its_schema() {
+        assert_required_fields_present(
+            schemars::schema_for!(ListGamesResult),
+            serde_json::to_value(ListGamesResult {
+                total: 0,
+                returned: 0,
+                offset: 0,
+                games: Vec::new(),
+            })
+            .unwrap(),
+        );
+    }
+
+    #[test]
+    fn backlog_parses_to_a_cleared_status_and_junk_is_rejected() {
+        assert_eq!(parse_status_filter("playing").unwrap(), Some(GameStatus::Playing));
+        assert_eq!(parse_status_filter("  Completed ").unwrap(), Some(GameStatus::Completed));
+        assert_eq!(parse_status_filter("backlog").unwrap(), None);
+        assert!(parse_status_filter("banana").is_err());
     }
 }
 

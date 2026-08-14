@@ -290,20 +290,27 @@ textarea:focus {
 
 /* Settings panels flow into as many columns as the window allows rather than sitting
    in one narrow strip. Columns break to a single stack below ~420px of usable width. */
+/* Multi-column rather than grid: these panels differ a lot in height, and grid rows are
+   as tall as their tallest cell, which left a dead gap under every shorter panel. Columns
+   flow each panel directly under the previous one instead. */
 .settings-stack {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
-  gap: 1.25rem;
-  align-items: start;
+  columns: 420px 2;
+  column-gap: 1.25rem;
 }
 
 .settings-stack > .panel {
   max-width: none;
 }
 
+.settings-stack > * {
+  /* A panel split across a column boundary would be unreadable. */
+  break-inside: avoid;
+  margin-bottom: 1.25rem;
+}
+
 /* Spans every column — used for the Library data summary at the top. */
 .panel-wide {
-  grid-column: 1 / -1;
+  column-span: all;
 }
 
 .stat-row {
