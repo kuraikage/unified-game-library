@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { DriveIcon, InstallIcon, PlayIcon } from '../icons';
 import { statusMeta } from '../gameStatus';
 import StatusButtons from './StatusButtons';
-import CoverImage from './CoverImage';
 
 const FOCUS = { preventScroll: true };
 
@@ -42,7 +41,6 @@ function heroUrl(game) {
 export default function GameDetail({
   game,
   entry,
-  coverSources,
   installed,
   status,
   onClose,
@@ -138,27 +136,25 @@ export default function GameDetail({
         ref={panelRef}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Without Steam key art the band collapses to just enough room for the cover to
-            overlap, rather than leaving a strip of empty colour. */}
-        <div className={`detail-hero${hero ? '' : ' is-bare'}`}>
-          {hero && (
+        {/* Only rendered when there is key art to show. A game with no Steam page would
+            otherwise get a strip of empty colour above its title. */}
+        {hero && (
+          <div className="detail-hero">
             <img
               src={hero}
               alt=""
               className="detail-hero-art"
-              loading="lazy"
               onError={() => setHeroFailed(true)}
             />
-          )}
-          <div className="detail-hero-cover">
-            <CoverImage sources={coverSources} fallbackText={game.title.slice(0, 1)} />
           </div>
-          <button type="button" className="detail-close" onClick={onClose} ref={closeRef}>
-            Close
-          </button>
-        </div>
+        )}
 
-        <div className="detail-body">
+        {/* Outside the hero so it sits in the same place with or without art. */}
+        <button type="button" className="detail-close" onClick={onClose} ref={closeRef}>
+          Close
+        </button>
+
+        <div className={`detail-body${hero ? '' : ' is-bare'}`}>
           <h2 className="detail-title">{game.title}</h2>
 
           <div className="detail-badges">

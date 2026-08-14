@@ -12,7 +12,6 @@ import FilterBar from './components/FilterBar';
 import GameGrid from './components/GameGrid';
 import GameList from './components/GameList';
 import GameDetail from './components/GameDetail';
-import { coverSources } from './covers';
 import SegmentedControl from './components/SegmentedControl';
 import StatusStrip from './components/StatusStrip';
 import { LibraryIcon, SettingsIcon } from './icons';
@@ -446,6 +445,7 @@ export default function App() {
                   onLaunch={handleLaunch}
                   onInstall={handleInstall}
                   onStatusChange={handleStatusChange}
+                  onOpen={setDetailGame}
                 />
               )}
             </>
@@ -460,7 +460,6 @@ export default function App() {
           key={detailGame.id}
           game={detailGame}
           entry={metadata[slugify(detailGame.title)]}
-          coverSources={coverSources(detailGame, metadata[slugify(detailGame.title)])}
           installed={installed[detailGame.id] ?? null}
           status={statuses[slugify(detailGame.title)]?.status ?? null}
           onClose={() => setDetailGame(null)}

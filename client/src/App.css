@@ -1177,6 +1177,8 @@ hr {
 }
 
 .game-list tbody tr {
+  /* Rows open the detail panel, same as cards. */
+  cursor: pointer;
   transition: background-color var(--dur-fast) var(--ease);
 }
 
@@ -1280,9 +1282,6 @@ hr {
   background: #1c1c22;
 }
 
-.detail-hero.is-bare {
-  height: 96px;
-}
 
 .detail-hero-art {
   width: 100%;
@@ -1292,23 +1291,12 @@ hr {
   mask-image: linear-gradient(to bottom, #000 35%, transparent);
 }
 
-/* The portrait cover overlaps the hero, which is what makes the header read as one
-   object rather than a banner with a picture under it. */
-.detail-hero-cover {
-  position: absolute;
-  bottom: -46px;
-  left: 1.5rem;
-  width: 96px;
-  aspect-ratio: 2 / 3;
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
-  background: #1c1c22;
-}
 
+/* Positioned against the panel, not the hero, so it lands in the same place whether or
+   not there is key art. */
 .detail-close {
   position: absolute;
+  z-index: 2;
   top: 0.75rem;
   right: 0.75rem;
   padding: 0.35rem 0.85rem;
@@ -1326,8 +1314,11 @@ hr {
 
 .detail-body {
   padding: 1.25rem 1.5rem 1.5rem;
-  /* Clears the overlapping cover. */
-  margin-left: 112px;
+}
+
+/* With no hero band above it, the title needs room for the close button. */
+.detail-body.is-bare {
+  padding-top: 3.25rem;
 }
 
 .detail-title {
@@ -1416,15 +1407,6 @@ hr {
   transform: none;
 }
 
-@media (max-width: 620px) {
-  .detail-hero-cover {
-    display: none;
-  }
-
-  .detail-body {
-    margin-left: 0;
-  }
-}
 
 @keyframes fade-in {
   from {
