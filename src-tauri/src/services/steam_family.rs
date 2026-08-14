@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use serde::Deserialize;
 
-use crate::models::Game;
+use ugly_core::models::Game;
 
 const FAMILY_GROUP_URL: &str =
     "https://api.steampowered.com/IFamilyGroupsService/GetFamilyGroupForUser/v1/";

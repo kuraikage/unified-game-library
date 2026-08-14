@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use anyhow::{bail, Result};
 use serde::Deserialize;
 
-use crate::models::{slugify, EpicExportItem, Game};
+use ugly_core::models::{slugify, EpicExportItem, Game};
 
 #[derive(Deserialize)]
 struct OrderWrapper {

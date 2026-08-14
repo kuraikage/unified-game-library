@@ -5,11 +5,11 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::credentials::{self, Secret};
-use crate::models::{
+use ugly_core::models::{
     slugify, EnrichmentJob, EpicLibrary, Game, GameStatus, MetadataEntry, SettingsView, StatusEntry,
 };
 use crate::services::{epic, igdb, steam};
-use crate::store::Store;
+use ugly_core::store::Store;
 
 pub struct AppState {
     pub store: Arc<Store>,
@@ -281,22 +281,22 @@ pub fn set_game_status(
 #[tauri::command]
 pub fn get_installed(
     state: State<'_, AppState>,
-) -> CmdResult<std::collections::HashMap<String, crate::installed::InstalledGame>> {
-    let mut ids: Vec<(String, String, String)> = Vec::new();
-    for game in state.store.steam_games().map_err(to_err)? {
-        ids.push((game.id, game.platform, game.title));
-    }
-    for game in state.store.epic_library().map_err(to_err)?.games {
-        ids.push((game.id, game.platform, game.title));
-    }
+) -> CmdResult<std::collections::HashMap<String, ugly_core::installed::InstalledGame>> {
+    // Merged rather than per-table, so a family-shared game that is installed is reported
+    // too — the same list the UI renders, from the same helper the MCP server uses.
+    let games = ugly_core::library::merge(
+        state.store.steam_games().map_err(to_err)?,
+        state.store.family_games().map_err(to_err)?,
+        state.store.epic_library().map_err(to_err)?.games,
+    );
 
-    let found = crate::installed::detect(&ids);
+    let found = ugly_core::library::installed_map(&games);
     let steam = found.values().filter(|g| g.platform == "steam").count();
     let epic = found.values().filter(|g| g.platform == "epic").count();
     log::info!(
         "Installed scan: {} matched ({steam} Steam, {epic} Epic) of {} library entries",
         found.len(),
-        ids.len()
+        games.len()
     );
     Ok(found)
 }

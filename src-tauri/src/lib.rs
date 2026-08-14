@@ -1,12 +1,12 @@
 mod bookmarklet;
 mod commands;
 mod credentials;
-mod installed;
 mod launcher;
 mod migrate;
-mod models;
 mod services;
-mod store;
+
+// models, store and installed live in ugly-core, shared with the MCP server.
+use ugly_core::store;
 
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -15,8 +15,8 @@ use tauri::Manager;
 
 use commands::AppState;
 use credentials::Secret;
-use models::EnrichmentJob;
-use store::Store;
+use ugly_core::models::EnrichmentJob;
+use ugly_core::store::Store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

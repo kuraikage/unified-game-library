@@ -18,6 +18,9 @@ impl Store {
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA foreign_keys = ON;
+             -- The MCP server opens this same database while the app is running, so a
+             -- write can find the other process mid-transaction. Wait rather than fail.
+             PRAGMA busy_timeout = 5000;
 
              CREATE TABLE IF NOT EXISTS epic_games (
                  id           TEXT PRIMARY KEY,
@@ -362,6 +365,23 @@ impl Store {
     }
 }
 
+/// Location of the pre-Tauri JSON store, so an existing install keeps its data.
+pub fn legacy_store_dir() -> Option<PathBuf> {
+    let dir = std::env::current_dir().ok()?;
+    // In dev the CWD is src-tauri; in a packaged build this simply won't exist.
+    for candidate in [
+        dir.join("../server/src/store"),
+        dir.join("server/src/store"),
+    ] {
+        if candidate.join("epic-library.json").exists()
+            || candidate.join("game-metadata.json").exists()
+        {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::Store;
@@ -404,21 +424,4 @@ mod tests {
         store.set_status("celeste", Some(GameStatus::Playing), 950).unwrap();
         assert_eq!(store.all_statuses().unwrap()["celeste"].completed_at, None);
     }
-}
-
-/// Location of the pre-Tauri JSON store, so an existing install keeps its data.
-pub fn legacy_store_dir() -> Option<PathBuf> {
-    let dir = std::env::current_dir().ok()?;
-    // In dev the CWD is src-tauri; in a packaged build this simply won't exist.
-    for candidate in [
-        dir.join("../server/src/store"),
-        dir.join("server/src/store"),
-    ] {
-        if candidate.join("epic-library.json").exists()
-            || candidate.join("game-metadata.json").exists()
-        {
-            return Some(candidate);
-        }
-    }
-    None
 }
