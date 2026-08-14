@@ -1416,3 +1416,21 @@ hr {
     opacity: 1;
   }
 }
+
+/* Footer line under the settings columns: app version and project link. */
+.settings-version {
+  column-span: all;
+  margin: 0.5rem 0 0;
+  text-align: center;
+  font-size: 0.8rem;
+  opacity: 0.5;
+}
+
+.settings-version a {
+  color: inherit;
+}
+
+.settings-version-sep {
+  margin: 0 0.5rem;
+  opacity: 0.6;
+}

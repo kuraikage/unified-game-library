@@ -8,6 +8,7 @@ import SettingsPanel from './components/SettingsPanel';
 import EpicImport from './components/EpicImport';
 import SteamFamilyImport from './components/SteamFamilyImport';
 import McpPanel from './components/McpPanel';
+import ExternalLink from './components/ExternalLink';
 import FilterBar from './components/FilterBar';
 import GameGrid from './components/GameGrid';
 import GameList from './components/GameList';
@@ -43,6 +44,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState(null);
   const [detailGame, setDetailGame] = useState(null);
+  const [appVersion, setAppVersion] = useState(null);
   const enrichRequested = useRef(false);
 
   const loadAll = useCallback(async () => {
@@ -87,6 +89,11 @@ export default function App() {
   }, [loadAll]);
 
   // Rust pushes these, so the UI reacts without polling.
+  // Fixed for the life of the process, so it's fetched once and never refreshed.
+  useEffect(() => {
+    api.getAppVersion().then(setAppVersion).catch(() => {});
+  }, []);
+
   useEffect(() => {
     const unlisten = [];
     api.onEnrichmentProgress((job) => {
@@ -395,6 +402,16 @@ export default function App() {
               />
 
               <McpPanel />
+
+              {/* Spans the columns so it reads as a footer for the whole screen rather
+                  than the tail of whichever column it landed in. */}
+              <p className="settings-version">
+                UGLy {appVersion ?? '…'}
+                <span className="settings-version-sep">·</span>
+                <ExternalLink href="https://github.com/kuraikage/unified-game-library">
+                  github.com/kuraikage/unified-game-library
+                </ExternalLink>
+              </p>
             </div>
           )}
 

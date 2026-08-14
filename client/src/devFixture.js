@@ -128,6 +128,7 @@ export const devApi = {
   installGame: async () => {},
   openExternal: async (url) => window.open(url, '_blank'),
   bookmarkletPort: async () => 43117,
+  getAppVersion: async () => '1.1.0-fixture',
   getMcpInfo: async () => ({
     available: true,
     path: 'C:\\Users\\you\\AppData\\Local\\UGLy\\ugly-mcp.exe',

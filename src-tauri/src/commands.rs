@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::credentials::{self, Secret};
 use crate::jobs::JobSlot;
@@ -529,6 +529,15 @@ pub fn set_game_status(
         .set_status(&slug, parsed, igdb::now_ms())
         .map_err(to_err)?;
     state.store.all_statuses().map_err(to_err)
+}
+
+/// The version shown in Settings.
+///
+/// Read from Tauri's package info rather than `CARGO_PKG_VERSION`, so it is the same
+/// number the installer and the Windows "Apps & features" entry report.
+#[tauri::command]
+pub fn get_app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 // ---------- mcp server ----------

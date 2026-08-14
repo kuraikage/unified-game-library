@@ -49,6 +49,7 @@ const tauriApi = {
   // Rust resolves the bundled MCP binary's path, since the installer lets the user pick
   // where the app goes — the UI must not guess it.
   getMcpInfo: () => invoke('get_mcp_info'),
+  getAppVersion: () => invoke('get_app_version'),
 
   // Pushed from Rust: the bookmarklet landing in the background, and lookup progress.
   onEpicImported: (handler) => listen('epic-imported', (event) => handler(event.payload)),

@@ -50,6 +50,14 @@ export default function McpPanel() {
             <code>claude_desktop_config.json</code>; for Claude Code, run{' '}
             <code>claude mcp add ugly -- "{info.path}"</code>.
           </p>
+          {/* Codex has a form for this, so the JSON below is no use there — it needs the
+              path on its own. */}
+          <p className="hint">
+            Codex has a form instead: <strong>Settings → MCP Servers → + Add server</strong>, pick
+            a local/STDIO server, name it <code>ugly</code> and give it this command, leaving the
+            arguments and working directory empty:
+          </p>
+          <pre className="snippet">{info.path}</pre>
           <pre className="snippet">{info.config}</pre>
           <div className="button-row">
             <button type="button" onClick={handleCopy}>

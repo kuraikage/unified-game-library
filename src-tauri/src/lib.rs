@@ -108,6 +108,7 @@ pub fn run() {
             commands::open_external,
             commands::bookmarklet_port,
             commands::get_mcp_info,
+            commands::get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

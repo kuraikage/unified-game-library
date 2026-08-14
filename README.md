@@ -32,13 +32,15 @@ your mood — or connect the [built-in MCP server](#ask-an-ai-what-to-play) and 
 
 <sub>Grid view — Steam, Epic and Steam Family in one place, with installed games marked.</sub>
 
-<img src="docs/screenshots/library-list.png" alt="List view showing title, platform, playtime, genres and tags with Play and Store actions" />
+<img src="docs/screenshots/library-list.png" alt="List view showing title, platform, playtime, genres and Steam tags with Play and Store actions" />
 
-<sub>List view — genres and tags from IGDB, with Play or Store depending on whether it's installed.</sub>
+<sub>List view — Steam's player-voted tags alongside IGDB genres, with Play or Store depending on
+whether it's installed. Clicking any row or card opens the full details.</sub>
 
 <img src="docs/screenshots/settings.png" alt="Settings screen showing library counts, connection status and the import bookmarklets" />
 
-<sub>Settings — library totals, connection status, and the one-time bookmarklet setup.</sub>
+<sub>Settings — library totals, connection status, the one-time bookmarklet setup, and the MCP
+server details.</sub>
 
 ## Features
 
@@ -129,13 +131,14 @@ library and answer the question the app exists to solve:
 > *"I've got about two hours and I want something atmospheric I can finish in one sitting. What's
 > installed that fits?"*
 
-Open **Settings → Ask an AI what to play** and press **Copy config** — it fills in the path to the
-bundled `ugly-mcp` binary for you. Paste it into your MCP client and restart it.
+Open **Settings → Ask an AI what to play**. It shows the full path to the bundled `ugly-mcp`
+binary and a **Copy config** button — whichever client you use, that path is what it needs.
 
 <details>
-<summary>Configuring it by hand</summary>
+<summary>Claude Desktop</summary>
 
-For Claude Desktop, add this to `claude_desktop_config.json`:
+Press **Copy config** in Settings and paste it into `claude_desktop_config.json`, then restart
+Claude Desktop:
 
 ```json
 {
@@ -148,17 +151,40 @@ For Claude Desktop, add this to `claude_desktop_config.json`:
 }
 ```
 
-For Claude Code:
+</details>
+
+<details>
+<summary>Claude Code</summary>
 
 ```bash
 claude mcp add ugly -- "C:\Users\you\AppData\Local\UGLy\ugly-mcp.exe"
 ```
 
-The path depends on where you installed UGLy; the Settings panel shows the real one. The server
-finds the database on its own — if yours lives somewhere unusual, point `UGLY_DATA_DIR` at the
-folder containing `ugly.db`.
+</details>
+
+<details>
+<summary>Codex</summary>
+
+Codex has a UI for this, so there's no JSON to paste:
+
+1. Open **Codex → Settings → MCP Servers**
+2. Click **+ Add server**
+3. Choose **STDIO / Local server** (wording varies by version)
+4. Fill in:
+   - **Name:** `ugly`
+   - **Command:** the path shown in UGLy's Settings, e.g.
+     `C:\Users\you\AppData\Local\UGLy\ugly-mcp.exe`
+   - **Arguments:** leave empty
+   - **Working directory:** leave empty
+5. Save and enable it
+
+It should then show as enabled under **Settings → MCP Servers**.
 
 </details>
+
+The path depends on where you installed UGLy, which is why Settings shows the real one rather than
+a guess. The server finds the library database on its own — if yours lives somewhere unusual, point
+`UGLY_DATA_DIR` at the folder containing `ugly.db`.
 
 ### What it can do
 
