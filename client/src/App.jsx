@@ -11,6 +11,8 @@ import McpPanel from './components/McpPanel';
 import FilterBar from './components/FilterBar';
 import GameGrid from './components/GameGrid';
 import GameList from './components/GameList';
+import GameDetail from './components/GameDetail';
+import { coverSources } from './covers';
 import SegmentedControl from './components/SegmentedControl';
 import StatusStrip from './components/StatusStrip';
 import { LibraryIcon, SettingsIcon } from './icons';
@@ -41,6 +43,7 @@ export default function App() {
   const [statuses, setStatuses] = useState({});
   const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState(null);
+  const [detailGame, setDetailGame] = useState(null);
   const enrichRequested = useRef(false);
   const steamTagsRequested = useRef(false);
 
@@ -104,6 +107,13 @@ export default function App() {
       api.getMetadata().then(setMetadata).catch(() => {});
     }).then((fn) => unlisten.push(fn));
 
+    // Newly resolved appids mean more games can be tagged, so run the (cheap, batched)
+    // tag pass again to pick them up.
+    api.onAppidProgress((job) => {
+      if (job.running) return;
+      api.enrichSteamTags().catch(() => {});
+    }).then((fn) => unlisten.push(fn));
+
     api.onEpicImported(() => {
       loadAll();
       setView('library');
@@ -151,8 +161,11 @@ export default function App() {
     if (loading || allGames.length === 0 || steamTagsRequested.current) return;
     steamTagsRequested.current = true;
 
-    // Returns as soon as the pass starts; the result arrives on the steam-progress event.
+    // Both return as soon as they start; results arrive on their progress events.
     api.enrichSteamTags().catch((err) => console.warn('Steam tag lookup failed:', err));
+    // Finds Steam appids for Epic-only games so they get Steam tags too. Slow, cached
+    // permanently, and shrinks to nothing after the first pass.
+    api.resolveEpicAppids().catch((err) => console.warn('Steam appid lookup failed:', err));
   }, [loading, allGames.length]);
 
   async function handleRefreshSteam() {
@@ -419,6 +432,7 @@ export default function App() {
                   onLaunch={handleLaunch}
                   onInstall={handleInstall}
                   onStatusChange={handleStatusChange}
+                  onOpen={setDetailGame}
                 />
               ) : (
                 <GameList
@@ -434,6 +448,20 @@ export default function App() {
             </>
           )}
         </main>
+      )}
+
+      {detailGame && (
+        <GameDetail
+          game={detailGame}
+          entry={metadata[slugify(detailGame.title)]}
+          coverSources={coverSources(detailGame, metadata[slugify(detailGame.title)])}
+          installed={installed[detailGame.id] ?? null}
+          status={statuses[slugify(detailGame.title)]?.status ?? null}
+          onClose={() => setDetailGame(null)}
+          onLaunch={handleLaunch}
+          onInstall={handleInstall}
+          onStatusChange={handleStatusChange}
+        />
       )}
     </div>
   );

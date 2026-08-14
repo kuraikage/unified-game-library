@@ -5,7 +5,7 @@ use tauri::{AppHandle, State};
 
 use crate::credentials::{self, Secret};
 use crate::jobs::JobSlot;
-use crate::services::{epic, igdb, steam, steam_tags};
+use crate::services::{epic, igdb, steam, steam_search, steam_tags};
 use ugly_core::metadata;
 use ugly_core::models::{
     self, slugify, EnrichmentJob, EpicLibrary, Game, GameStatus, MetadataEntry, SettingsView,
@@ -18,6 +18,9 @@ pub struct AppState {
     /// One slot per source: they have different credentials, runtimes and failure modes.
     pub igdb_job: Arc<JobSlot>,
     pub steam_job: Arc<JobSlot>,
+    /// Epic title -> Steam appid. One request per title, so it must not hold up the
+    /// batched tag fetch.
+    pub appid_job: Arc<JobSlot>,
 }
 
 type CmdResult<T> = Result<T, String>;
@@ -366,6 +369,104 @@ pub fn enrich_steam_tags(
     });
 
     Ok(state.steam_job.snapshot())
+}
+
+/// Searches the Steam store for the Epic-only games, so they can get Steam tags too.
+///
+/// Slow by comparison — one request per title with a deliberate gap — which is why it runs
+/// in its own slot rather than holding up the batched tag fetch. Results are cached
+/// permanently, misses included, so this shrinks to nothing after the first pass.
+#[tauri::command]
+pub fn resolve_epic_appids(app: AppHandle, state: State<'_, AppState>) -> CmdResult<EnrichmentJob> {
+    if state.appid_job.is_running() {
+        return Ok(state.appid_job.snapshot());
+    }
+
+    let resolved = state.store.resolved_appids().map_err(to_err)?;
+    let mut seen = HashSet::new();
+    // Only games we don't already own on Steam: an owned copy carries its appid directly.
+    let owned: HashSet<String> = state
+        .store
+        .steam_games()
+        .map_err(to_err)?
+        .into_iter()
+        .chain(state.store.family_games().map_err(to_err)?)
+        .map(|g| slugify(&g.title))
+        .collect();
+
+    let pending: Vec<String> = state
+        .store
+        .epic_library()
+        .map_err(to_err)?
+        .games
+        .into_iter()
+        .filter(|game| {
+            let slug = slugify(&game.title);
+            !slug.is_empty()
+                && !owned.contains(&slug)
+                && !resolved.contains_key(&slug)
+                && seen.insert(slug)
+        })
+        .map(|game| game.title)
+        .collect();
+
+    if pending.is_empty() || !state.appid_job.try_start(pending.len()) {
+        return Ok(state.appid_job.snapshot());
+    }
+
+    let store = state.store.clone();
+    let job = state.appid_job.clone();
+    tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::new();
+        let mut batch: Vec<(String, Option<String>)> = Vec::new();
+        let mut matched = 0usize;
+
+        for title in &pending {
+            match steam_search::resolve_appid(&client, title).await {
+                Ok(Ok(appid)) => {
+                    if appid.is_some() {
+                        matched += 1;
+                    }
+                    // A miss is cached too, so it is never searched again.
+                    batch.push((slugify(title), appid));
+                }
+                // Steam asked us to back off. Stop; what's cached persists and the rest
+                // is picked up next launch.
+                Ok(Err(_)) => {
+                    log::info!("Steam store search rate-limited; resuming next launch");
+                    break;
+                }
+                Err(err) => {
+                    log::warn!("Steam store search failed for {title}: {err}");
+                }
+            }
+
+            if batch.len() >= 25 {
+                if let Err(err) = store.save_appid_lookup(&batch, igdb::now_ms()) {
+                    log::error!("Could not save Steam appid lookups: {err}");
+                }
+                batch.clear();
+                job.advance(&app, 25);
+            }
+
+            // The store search is rate-limited harder than api.steampowered.com.
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        }
+
+        if !batch.is_empty() {
+            if let Err(err) = store.save_appid_lookup(&batch, igdb::now_ms()) {
+                log::error!("Could not save Steam appid lookups: {err}");
+            }
+        }
+
+        log::info!(
+            "Steam appid lookup: {matched} of {} Epic titles found on Steam",
+            pending.len()
+        );
+        job.finish(&app, None);
+    });
+
+    Ok(state.appid_job.snapshot())
 }
 
 /// Every library game that has a Steam appid, keyed by slug.

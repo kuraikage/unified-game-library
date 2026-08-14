@@ -30,6 +30,7 @@ const tauriApi = {
   // the data, and the Steam appid a game carries is lost by the time it reaches JS.
   enrichMetadata: (force = false) => invoke('enrich_metadata', { force }),
   enrichSteamTags: (force = false) => invoke('enrich_steam_tags', { force }),
+  resolveEpicAppids: () => invoke('resolve_epic_appids'),
 
   getStatuses: () => invoke('get_statuses'),
   // `status` of null clears it, returning the game to the implicit backlog.
@@ -54,6 +55,7 @@ const tauriApi = {
   onFamilyImported: (handler) => listen('family-imported', (event) => handler(event.payload)),
   onEnrichmentProgress: (handler) => listen('enrichment-progress', (event) => handler(event.payload)),
   onSteamProgress: (handler) => listen('steam-progress', (event) => handler(event.payload)),
+  onAppidProgress: (handler) => listen('appid-progress', (event) => handler(event.payload)),
 };
 
 // Sample data for doing UI work in a plain browser, where there is no invoke bridge.

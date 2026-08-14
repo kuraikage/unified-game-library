@@ -48,7 +48,11 @@ your mood — or connect the [built-in MCP server](#ask-an-ai-what-to-play) and 
   (`sci-fi` → *Science fiction*, `fps` → *Shooter*, `deckbuilder` → *Card & Board Game*)
 - **Installed detection** — sees what's on disk across every Steam library folder and Epic's
   manifests, with Play / Install buttons that hand off to the right launcher
-- **Genres, tags and artwork** from IGDB, fetched automatically for new games
+- **Tags worth searching** — Steam's player-voted tags (`Souls-like`, `Metroidvania`, `Cozy`),
+  topped up with genres and cover art from IGDB. Epic-only games are matched to their Steam page
+  where one exists, so they get the same tags
+- **Game details** — click any card for the blurb, review score, release date, developer and the
+  full tag list
 - **CSV export** of whatever the current filter is showing — feed it to an LLM and let it pick
 - **Grid and list views**, filterable by platform or installed state
 - **MCP server** so Claude, Codex or any MCP client can search your library and recommend
@@ -78,15 +82,22 @@ configured yet.
 
 Your profile's game details need to be public for the API to return your library.
 
-### IGDB (genres, tags, artwork) — optional
+### Tags and artwork
+
+**Steam tags need no setup.** UGLy reads Steam's player-voted tags for every game with a store
+page — including Epic-only games, whose titles are matched to Steam once and cached. This is
+batched, so the whole library takes a few seconds, and it is where the genuinely useful labels
+come from: `Souls-like`, `Metroidvania`, `Bullet Hell`, `Cozy`.
+
+**IGDB is optional** and adds genres and portrait cover art, plus tags for the games with no
+Steam page at all:
 
 1. Register a free application at the
    [Twitch developer console](https://dev.twitch.tv/console/apps).
 2. Paste the Client ID and Client Secret into **Settings**.
 
-Lookups then happen on their own: whenever the library gains games with no metadata, UGLy fetches
-just those in the background and shows live progress. Results are cached permanently, so only
-genuinely new titles ever cost a request.
+Lookups then happen on their own in the background, one game at a time, with live progress.
+Results are cached, so only genuinely new titles cost a request.
 
 ### Epic Games
 
@@ -214,6 +225,7 @@ VITE_UI_FIXTURE=1 npm run dev --prefix client
 | Storage | SQLite (`rusqlite`) |
 | Credentials | Windows Credential Manager |
 | Imports | A small local HTTP listener on port `43117` that the bookmarklets post to |
+| Tags | Steam's public store endpoints (no API key), plus IGDB via a Twitch app |
 | MCP server | A separate stdio binary (`rmcp`), started by your MCP client |
 
 The Rust code is a Cargo workspace: `crates/core` holds the data layer, `crates/mcp` is the MCP
@@ -231,8 +243,13 @@ why the installer is a few megabytes rather than a few hundred.
   the download entirely.
 - **Epic install** opens the game's store page in the Epic launcher, because Epic exposes no
   install action for a game you don't already own locally.
-- **IGDB matching is by title**, so demos, playtests and bundled tools often won't resolve to a
-  record and simply show no genres or tags.
+- **Metadata matching is by title**, so demos, playtests and bundled tools often won't resolve to
+  a record and simply show no genres or tags.
+- **Epic titles are only matched to Steam on an exact name match**, edition suffixes aside. That
+  is deliberate: Steam's top result for a game it doesn't carry is frequently the sequel, and a
+  wrong match would silently attach another game's tags. Some games are missed as a result.
+- **Steam tags are player-voted**, so a handful of joke tags exist. Only the most-voted ones per
+  game are kept, which filters out nearly all of it.
 
 ## Contributing
 

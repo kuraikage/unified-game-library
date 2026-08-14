@@ -13,6 +13,7 @@ export default function GameGrid({
   onLaunch,
   onInstall,
   onStatusChange,
+  onOpen,
 }) {
   if (games.length === 0) {
     return <p className="empty">No games match your filters yet.</p>;
@@ -33,6 +34,7 @@ export default function GameGrid({
             onLaunch={onLaunch}
             onInstall={onInstall}
             onStatusChange={onStatusChange}
+            onOpen={onOpen}
           />
         );
       })}

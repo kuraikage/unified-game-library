@@ -70,7 +70,9 @@ export const devApi = {
   // goes, so the status strip behaves exactly as it does against the Rust backend.
   // Steam tags need no credentials and finish in seconds, so the fixture just no-ops.
   enrichSteamTags: async () => ({ running: false, total: 0, completed: 0, error: null }),
+  resolveEpicAppids: async () => ({ running: false, total: 0, completed: 0, error: null }),
   onSteamProgress: async () => () => {},
+  onAppidProgress: async () => () => {},
 
   enrichMetadata: async () => {
     const titles = sampleGames.map((g) => g.title);

@@ -81,6 +81,7 @@ pub fn run() {
                 store,
                 igdb_job: Arc::new(JobSlot::new("enrichment-progress")),
                 steam_job: Arc::new(JobSlot::new("steam-progress")),
+                appid_job: Arc::new(JobSlot::new("appid-progress")),
             });
 
             Ok(())
@@ -98,6 +99,7 @@ pub fn run() {
             commands::get_enrichment_job,
             commands::enrich_metadata,
             commands::enrich_steam_tags,
+            commands::resolve_epic_appids,
             commands::get_statuses,
             commands::set_game_status,
             commands::get_installed,

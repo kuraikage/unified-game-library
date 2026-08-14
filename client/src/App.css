@@ -1236,3 +1236,188 @@ hr {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- game detail panel ---------- */
+
+.detail-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background: rgba(4, 4, 8, 0.72);
+  backdrop-filter: blur(3px);
+  animation: fade-in 0.18s var(--ease-soft) both;
+}
+
+.detail-panel {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  border-radius: 16px;
+  background: #14141a;
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  animation: rise-in 0.28s var(--ease) both;
+}
+
+.detail-hero {
+  position: relative;
+  height: 190px;
+  overflow: hidden;
+  background: #1c1c22;
+}
+
+.detail-hero-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Fades into the body so the title sits on flat colour rather than busy artwork. */
+  mask-image: linear-gradient(to bottom, #000 35%, transparent);
+}
+
+/* The portrait cover overlaps the hero, which is what makes the header read as one
+   object rather than a banner with a picture under it. */
+.detail-hero-cover {
+  position: absolute;
+  bottom: -46px;
+  left: 1.5rem;
+  width: 96px;
+  aspect-ratio: 2 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  background: #1c1c22;
+}
+
+.detail-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  background: var(--overlay-btn-bg);
+  border: 1px solid var(--overlay-btn-border);
+  color: #fff;
+}
+
+.detail-close:hover {
+  background: var(--overlay-btn-bg-hover);
+  border-color: var(--overlay-btn-border-hover);
+}
+
+.detail-body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  /* Clears the overlapping cover. */
+  margin-left: 112px;
+}
+
+.detail-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.detail-blurb {
+  margin: 0 0 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  opacity: 0.85;
+}
+
+.detail-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem 1.25rem;
+  margin: 0 0 1.2rem;
+}
+
+.detail-facts dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  margin-bottom: 0.15rem;
+}
+
+.detail-facts dd {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+.detail-fact-wide {
+  grid-column: 1 / -1;
+}
+
+.detail-path {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  word-break: break-all;
+}
+
+.detail-section {
+  margin-bottom: 1rem;
+}
+
+.detail-section h3 {
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.55;
+  font-weight: 600;
+}
+
+/* The list view caps pill rows narrow; here there's room to use the full width. */
+.detail-panel .pills {
+  max-width: none;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 1.3rem;
+  padding-top: 1.1rem;
+  border-top: 1px solid var(--line);
+}
+
+/* The overlay buttons are sized for floating over cover art; in the panel they sit on a
+   solid surface and need a visible edge of their own. */
+.detail-actions .action-btn {
+  position: static;
+  opacity: 1;
+  transform: none;
+}
+
+@media (max-width: 620px) {
+  .detail-hero-cover {
+    display: none;
+  }
+
+  .detail-body {
+    margin-left: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

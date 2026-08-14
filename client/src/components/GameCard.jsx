@@ -20,14 +20,28 @@ function GameCard({
   onLaunch,
   onInstall,
   onStatusChange,
+  onOpen,
 }) {
   const playtime = formatPlaytime(game.playtimeMinutes);
   const meta = statusMeta(status);
 
   return (
+    // The card body opens the detail view. A button rather than a div so it is reachable
+    // by keyboard and announced as interactive; the action buttons inside stop the click
+    // from bubbling, so pressing Play never also opens the panel.
     <div
       className={`game-card${installed ? ' is-installed' : ''}${status ? ` is-${status}` : ''}`}
       style={index === undefined ? undefined : { '--i': index }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${game.title} — details`}
+      onClick={() => onOpen(game)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen(game);
+        }
+      }}
     >
       <div className="cover">
         <CoverImage sources={coverSources} fallbackText={game.title.slice(0, 1)} />
@@ -67,8 +81,9 @@ function GameCard({
         </div>
 
         {/* Actions only — these appear on hover, since they're things you do rather
-            than things you need to see while scanning. */}
-        <div className="cover-actions">
+            than things you need to see while scanning.
+            The click guard keeps them from also opening the detail panel. */}
+        <div className="cover-actions" onClick={(e) => e.stopPropagation()}>
           {installed ? (
             <button
               type="button"
