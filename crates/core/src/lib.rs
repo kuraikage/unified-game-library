@@ -5,6 +5,7 @@
 
 pub mod installed;
 pub mod library;
+pub mod metadata;
 pub mod models;
 pub mod paths;
 pub mod store;

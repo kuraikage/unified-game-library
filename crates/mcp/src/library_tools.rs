@@ -464,6 +464,8 @@ mod tests {
             completed_at: None,
             genres: Vec::new(),
             tags: Vec::new(),
+            review_percent: None,
+            released_at: None,
         };
 
         assert_required_fields_present(

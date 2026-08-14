@@ -69,7 +69,7 @@ export const devApi = {
   // Simulates a real background pass — progresses over time and fills the cache as it
   // goes, so the status strip behaves exactly as it does against the Rust backend.
   enrichMetadata: async (titles) => {
-    const pending = titles.filter((t) => !cachedMetadata[slugify(t)]);
+    const pending = titles.filter((t) => !cachedMetadata[slugify(t)]?.igdb);
     const total = pending.length;
     let completed = 0;
 
@@ -83,6 +83,14 @@ export const devApi = {
           coverUrl: null,
           notFound: false,
           fetchedAt: Date.now(),
+          // Mirrors the merged shape Rust returns; `igdb` is what drives the auto-enrich
+          // check, so the fixture is wrong without it.
+          igdb: true,
+          steam: false,
+          shortDescription: null,
+          reviewPercent: null,
+          reviewCount: null,
+          releasedAt: null,
         };
       }
       completed = Math.min(total, completed + step);

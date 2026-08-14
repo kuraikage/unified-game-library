@@ -10,7 +10,8 @@ use anyhow::Result;
 use serde::Serialize;
 
 use crate::installed::{self, InstalledGame};
-use crate::models::{slugify, Game, GameStatus, MetadataEntry};
+use crate::metadata::MergedMetadata;
+use crate::models::{slugify, Game, GameStatus};
 use crate::store::Store;
 
 /// One row of the unified library.
@@ -31,6 +32,10 @@ pub struct LibraryGame {
     pub completed_at: Option<i64>,
     pub genres: Vec<String>,
     pub tags: Vec<String>,
+    /// Percentage of Steam reviews that are positive. Absent for games with no Steam entry.
+    pub review_percent: Option<i64>,
+    /// Unix seconds, from Steam.
+    pub released_at: Option<i64>,
 }
 
 /// Merges the per-store tables into the single list the library shows.
@@ -84,10 +89,10 @@ pub fn load(store: &Store, scan_installed: bool) -> Result<Vec<LibraryGame>> {
     Ok(merged
         .into_iter()
         .map(|(game, shared)| {
+            // Typed lookup, not a JSON round trip: `all_metadata` already returns the
+            // merged struct, and deserializing per game ran on every MCP call.
             let slug = slugify(&game.title);
-            let entry: Option<MetadataEntry> = metadata
-                .get(&slug)
-                .and_then(|v| serde_json::from_value(v.clone()).ok());
+            let entry: Option<&MergedMetadata> = metadata.get(&slug);
             let status = statuses.get(&slug);
 
             LibraryGame {
@@ -100,8 +105,10 @@ pub fn load(store: &Store, scan_installed: bool) -> Result<Vec<LibraryGame>> {
                 playtime_minutes: game.playtime_minutes,
                 status: status.map(|s| s.status),
                 completed_at: status.and_then(|s| s.completed_at),
-                genres: entry.as_ref().map(|e| e.genres.clone()).unwrap_or_default(),
-                tags: entry.map(|e| e.tags).unwrap_or_default(),
+                genres: entry.map(|e| e.genres.clone()).unwrap_or_default(),
+                tags: entry.map(|e| e.tags.clone()).unwrap_or_default(),
+                review_percent: entry.and_then(|e| e.review_percent),
+                released_at: entry.and_then(|e| e.released_at),
             }
         })
         .collect())

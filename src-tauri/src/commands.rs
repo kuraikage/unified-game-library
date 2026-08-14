@@ -130,10 +130,13 @@ pub fn import_epic_library(state: State<'_, AppState>, data: String) -> CmdResul
 
 // ---------- metadata ----------
 
+/// Both sources merged, keyed by slug. Serializes to the same JS object shape as before,
+/// with the addition of `igdb`/`steam` provenance flags — see the note in `App.jsx` about
+/// why the enrichment check has to read those rather than test for presence.
 #[tauri::command]
 pub fn get_metadata(
     state: State<'_, AppState>,
-) -> CmdResult<serde_json::Map<String, serde_json::Value>> {
+) -> CmdResult<std::collections::HashMap<String, ugly_core::metadata::MergedMetadata>> {
     state.store.all_metadata().map_err(to_err)
 }
 

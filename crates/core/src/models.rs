@@ -177,9 +177,23 @@ pub fn slugify(title: &str) -> String {
     out.trim_matches('-').to_string()
 }
 
+/// Extracts the Steam appid from one of our game ids, which are minted as `steam-<appid>`.
+///
+/// Returns `None` for Epic ids, so callers can't accidentally treat one as an appid.
+pub fn steam_appid(id: &str) -> Option<&str> {
+    id.strip_prefix("steam-").filter(|rest| !rest.is_empty())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::slugify;
+    use super::{slugify, steam_appid};
+
+    #[test]
+    fn steam_appids_are_read_only_from_steam_ids() {
+        assert_eq!(steam_appid("steam-440"), Some("440"));
+        assert_eq!(steam_appid("epic-abc123"), None);
+        assert_eq!(steam_appid("steam-"), None);
+    }
 
     #[test]
     fn slugify_matches_js_behaviour() {

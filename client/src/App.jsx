@@ -115,11 +115,15 @@ export default function App() {
     return [...steamGames, ...shared, ...epicGames];
   }, [steamGames, familyGames, epicGames]);
 
-  // Any game with no cached lookup gets fetched automatically. Rust filters to just the
-  // missing ones, so passing the whole list is cheap.
+  // Any game with no cached IGDB lookup gets fetched automatically. Rust filters to just
+  // the missing ones, so passing the whole list is cheap.
+  //
+  // Note this tests `.igdb` and not merely that an entry exists. Metadata now merges two
+  // sources, so a Steam game carries tags before IGDB has ever seen it — testing for
+  // presence would mark it done and it would silently never get genres or cover art.
   useEffect(() => {
     if (loading || !settings.igdbConfigured || metadataJob.running || allGames.length === 0) return;
-    const missing = allGames.filter((g) => !metadata[slugify(g.title)]);
+    const missing = allGames.filter((g) => !metadata[slugify(g.title)]?.igdb);
     if (missing.length === 0) {
       enrichRequested.current = false;
       return;
@@ -243,8 +247,10 @@ export default function App() {
     downloadCsv(`ugly-library-${stamp}.csv`, buildLibraryCsv(games, metadata, statuses, installed));
   }
 
+  // Counts games IGDB has never resolved, which is what the "fetch genres & art" button
+  // acts on — Steam tags don't make a game enriched for that purpose.
   const missingMetadataCount = useMemo(
-    () => allGames.filter((g) => !metadata[slugify(g.title)]).length,
+    () => allGames.filter((g) => !metadata[slugify(g.title)]?.igdb).length,
     [allGames, metadata]
   );
 
