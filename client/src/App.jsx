@@ -7,6 +7,7 @@ import { buildLibraryCsv, downloadCsv } from './exportCsv';
 import SettingsPanel from './components/SettingsPanel';
 import EpicImport from './components/EpicImport';
 import SteamFamilyImport from './components/SteamFamilyImport';
+import McpPanel from './components/McpPanel';
 import FilterBar from './components/FilterBar';
 import GameGrid from './components/GameGrid';
 import GameList from './components/GameList';
@@ -353,6 +354,8 @@ export default function App() {
                   setView('library');
                 }}
               />
+
+              <McpPanel />
             </div>
           )}
 

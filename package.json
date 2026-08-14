@@ -4,8 +4,9 @@
   "version": "1.0.0",
   "scripts": {
     "install:all": "npm install --prefix client",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
+    "tauri:dev": "npm run build:mcp && tauri dev",
+    "build:mcp": "node scripts/build-mcp.mjs",
+    "tauri:build": "npm run build:mcp && tauri build",
     "tauri": "tauri"
   },
   "devDependencies": {

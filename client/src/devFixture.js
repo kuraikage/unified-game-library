@@ -113,6 +113,19 @@ export const devApi = {
   installGame: async () => {},
   openExternal: async (url) => window.open(url, '_blank'),
   bookmarkletPort: async () => 43117,
+  getMcpInfo: async () => ({
+    available: true,
+    path: 'C:\\Users\\you\\AppData\\Local\\UGLy\\ugly-mcp.exe',
+    config: JSON.stringify(
+      {
+        mcpServers: {
+          ugly: { command: 'C:\\Users\\you\\AppData\\Local\\UGLy\\ugly-mcp.exe', args: [] },
+        },
+      },
+      null,
+      2
+    ),
+  }),
   onEpicImported: async () => () => {},
   onFamilyImported: async () => () => {},
   onEnrichmentProgress: async (handler) => {

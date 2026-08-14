@@ -24,7 +24,7 @@ genres, tags and cover art, so you can search by mood instead of memory: `roguel
 `point and click`. Games already installed are marked and launch straight from the grid.
 
 Still can't decide? Export the whole thing to CSV and throw it at an AI to pick something based on
-your mood.
+your mood — or connect the [built-in MCP server](#ask-an-ai-what-to-play) and just ask.
 
 ## Screenshots
 
@@ -51,6 +51,8 @@ your mood.
 - **Genres, tags and artwork** from IGDB, fetched automatically for new games
 - **CSV export** of whatever the current filter is showing — feed it to an LLM and let it pick
 - **Grid and list views**, filterable by platform or installed state
+- **MCP server** so Claude, Codex or any MCP client can search your library and recommend
+  something to play
 
 ## Install
 
@@ -108,6 +110,60 @@ second bookmarklet that reads a short-lived session token. Same flow: copy it fr
 save it as a bookmark, then click it while logged in at
 [store.steampowered.com](https://store.steampowered.com). The token is used once and never stored.
 
+## Ask an AI what to play
+
+UGLy ships a small [MCP](https://modelcontextprotocol.io) server, so an assistant can read your
+library and answer the question the app exists to solve:
+
+> *"I've got about two hours and I want something atmospheric I can finish in one sitting. What's
+> installed that fits?"*
+
+Open **Settings → Ask an AI what to play** and press **Copy config** — it fills in the path to the
+bundled `ugly-mcp` binary for you. Paste it into your MCP client and restart it.
+
+<details>
+<summary>Configuring it by hand</summary>
+
+For Claude Desktop, add this to `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "ugly": {
+      "command": "C:\\Users\\you\\AppData\\Local\\UGLy\\ugly-mcp.exe",
+      "args": []
+    }
+  }
+}
+```
+
+For Claude Code:
+
+```bash
+claude mcp add ugly -- "C:\Users\you\AppData\Local\UGLy\ugly-mcp.exe"
+```
+
+The path depends on where you installed UGLy; the Settings panel shows the real one. The server
+finds the database on its own — if yours lives somewhere unusual, point `UGLY_DATA_DIR` at the
+folder containing `ugly.db`.
+
+</details>
+
+### What it can do
+
+| Tool | Purpose |
+|---|---|
+| `get_library_stats` | Totals per store, play states, install count, playtime, and the genres and tags actually present |
+| `list_games` | Search and filter by title, genre, tag, platform, play status or installed state |
+| `get_game` | Details for one game |
+| `set_game_status` | Mark a game as playing, completed or dropped, or return it to the backlog |
+
+**It cannot launch or install anything.** Starting programs stays a button you press yourself. The
+only thing it can change is a game's play status, which shows up in the app immediately.
+
+The server talks over stdio and is started by your MCP client, not by UGLy — it reads the same
+local database and sends nothing anywhere.
+
 ## Build from source
 
 Requires [Node.js](https://nodejs.org) (build-time only) and the [Rust toolchain](https://rustup.rs).
@@ -125,7 +181,8 @@ To produce an installer of your own:
 npm run tauri:build
 ```
 
-Output lands in `src-tauri/target/release/bundle/`.
+Output lands in `target/release/bundle/`. That command builds the MCP server first and stages it as
+a sidecar so the installer carries it; to build just that binary, run `npm run build:mcp`.
 
 To work on the UI in a normal browser with sample data (no Tauri, no real library):
 
@@ -143,6 +200,10 @@ VITE_UI_FIXTURE=1 npm run dev --prefix client
   directly from your machine.
 - The Epic and Steam Family imports run in *your* browser using *your* existing session. No
   passwords are entered into UGLy, and no long-lived tokens are stored.
+- **The MCP server is opt-in.** It only runs if you add it to an MCP client's config, and it only
+  ever touches the local database — it has no access to your credentials. Bear in mind that
+  whichever assistant you connect will see your library, so it goes wherever that client's data
+  goes.
 
 ## How it works
 
@@ -153,6 +214,11 @@ VITE_UI_FIXTURE=1 npm run dev --prefix client
 | Storage | SQLite (`rusqlite`) |
 | Credentials | Windows Credential Manager |
 | Imports | A small local HTTP listener on port `43117` that the bookmarklets post to |
+| MCP server | A separate stdio binary (`rmcp`), started by your MCP client |
+
+The Rust code is a Cargo workspace: `crates/core` holds the data layer, `crates/mcp` is the MCP
+server, and `src-tauri` is the desktop app. Core carries no Tauri dependency, which is what lets
+the MCP server link it without dragging in a window.
 
 The shipped app contains no JavaScript runtime — Node is only used to build the frontend, which is
 why the installer is a few megabytes rather than a few hundred.

@@ -104,6 +104,7 @@ pub fn run() {
             commands::install_game,
             commands::open_external,
             commands::bookmarklet_port,
+            commands::get_mcp_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

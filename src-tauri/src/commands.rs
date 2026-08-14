@@ -274,6 +274,57 @@ pub fn set_game_status(
     state.store.all_statuses().map_err(to_err)
 }
 
+// ---------- mcp server ----------
+
+/// Where the bundled MCP server lives, plus a config snippet the user can paste straight
+/// into an MCP client.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpInfo {
+    /// False when running from a dev build with no release binary staged yet, in which case
+    /// the UI explains that instead of handing over a path that doesn't work.
+    pub available: bool,
+    pub path: String,
+    /// Ready-to-paste JSON for `claude_desktop_config.json` and friends.
+    pub config: String,
+}
+
+/// Resolves the sidecar next to the running executable, which is where Tauri puts external
+/// binaries in both a dev run and an installed build. Computed rather than assumed, because
+/// the installer lets the user choose where the app goes.
+fn mcp_binary_path() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let beside = exe
+        .parent()?
+        .join(format!("ugly-mcp{}", std::env::consts::EXE_SUFFIX));
+    beside.exists().then_some(beside)
+}
+
+#[tauri::command]
+pub fn get_mcp_info() -> McpInfo {
+    let Some(path) = mcp_binary_path() else {
+        return McpInfo {
+            available: false,
+            path: String::new(),
+            config: String::new(),
+        };
+    };
+
+    let path = path.to_string_lossy().to_string();
+    let config = serde_json::json!({
+        "mcpServers": {
+            "ugly": { "command": path, "args": [] }
+        }
+    });
+
+    McpInfo {
+        available: true,
+        path,
+        // Pretty-printed because it is shown in a code block and pasted into a config file.
+        config: serde_json::to_string_pretty(&config).unwrap_or_default(),
+    }
+}
+
 // ---------- installed games ----------
 
 /// Scans Steam's .acf manifests and Epic's .item manifests and reports which of our
