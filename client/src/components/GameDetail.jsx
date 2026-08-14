@@ -50,6 +50,13 @@ export default function GameDetail({
   const panelRef = useRef(null);
   const closeRef = useRef(null);
 
+  // Held in a ref so the effect below can stay mount-only. The parent passes a fresh
+  // closure on every render, and it re-renders several times a second while a metadata
+  // pass is running — depending on that identity would tear down and re-run the effect
+  // continuously, stealing focus back to Close each time and making the panel unusable.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   // Escape closes, and focus is trapped while open so tabbing can't wander into the grid
   // behind the panel.
   useEffect(() => {
@@ -61,7 +68,7 @@ export default function GameDetail({
     function onKeyDown(event) {
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -96,7 +103,9 @@ export default function GameDetail({
       document.removeEventListener('keydown', onKeyDown, true);
       if (returnTo instanceof HTMLElement && document.contains(returnTo)) returnTo.focus();
     };
-  }, [onClose]);
+    // Mount only — see onCloseRef above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const meta = statusMeta(status);
   const playtime = formatPlaytime(game.playtimeMinutes);

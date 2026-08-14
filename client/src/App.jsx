@@ -45,7 +45,6 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [detailGame, setDetailGame] = useState(null);
   const enrichRequested = useRef(false);
-  const steamTagsRequested = useRef(false);
 
   const loadAll = useCallback(async () => {
     setError(null);
@@ -154,12 +153,16 @@ export default function App() {
       .catch((err) => setError(String(err)));
   }, [loading, settings.igdbConfigured, allGames.length]);
 
-  // Steam tags are a handful of batched requests for the whole library, so they're
-  // fetched on load with no progress UI. They need no credentials, which is why this
-  // isn't gated on settings the way the IGDB pass is.
+  // Steam tags are a handful of batched requests for the whole library, so they run with
+  // no progress UI. No credentials needed, which is why this isn't gated on settings the
+  // way the IGDB pass is.
+  //
+  // Keyed on the library size rather than latched to first load, so refreshing Steam or
+  // importing Epic games gets the new titles tagged straight away instead of at next
+  // launch. Rust returns immediately when there is nothing outstanding, so re-asking is
+  // cheap and a running pass can't be started twice.
   useEffect(() => {
-    if (loading || allGames.length === 0 || steamTagsRequested.current) return;
-    steamTagsRequested.current = true;
+    if (loading || allGames.length === 0) return;
 
     // Both return as soon as they start; results arrive on their progress events.
     api.enrichSteamTags().catch((err) => console.warn('Steam tag lookup failed:', err));
