@@ -68,7 +68,12 @@ export const devApi = {
 
   // Simulates a real background pass — progresses over time and fills the cache as it
   // goes, so the status strip behaves exactly as it does against the Rust backend.
-  enrichMetadata: async (titles) => {
+  // Steam tags need no credentials and finish in seconds, so the fixture just no-ops.
+  enrichSteamTags: async () => ({ running: false, total: 0, completed: 0, error: null }),
+  onSteamProgress: async () => () => {},
+
+  enrichMetadata: async () => {
+    const titles = sampleGames.map((g) => g.title);
     const pending = titles.filter((t) => !cachedMetadata[slugify(t)]?.igdb);
     const total = pending.length;
     let completed = 0;

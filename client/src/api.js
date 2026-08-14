@@ -26,7 +26,10 @@ const tauriApi = {
 
   getMetadata: () => invoke('get_metadata'),
   getEnrichmentJob: () => invoke('get_enrichment_job'),
-  enrichMetadata: (titles) => invoke('enrich_metadata', { titles }),
+  // Rust reads the library itself rather than being handed a title list — it already has
+  // the data, and the Steam appid a game carries is lost by the time it reaches JS.
+  enrichMetadata: (force = false) => invoke('enrich_metadata', { force }),
+  enrichSteamTags: (force = false) => invoke('enrich_steam_tags', { force }),
 
   getStatuses: () => invoke('get_statuses'),
   // `status` of null clears it, returning the game to the implicit backlog.
@@ -50,6 +53,7 @@ const tauriApi = {
   onEpicImported: (handler) => listen('epic-imported', (event) => handler(event.payload)),
   onFamilyImported: (handler) => listen('family-imported', (event) => handler(event.payload)),
   onEnrichmentProgress: (handler) => listen('enrichment-progress', (event) => handler(event.payload)),
+  onSteamProgress: (handler) => listen('steam-progress', (event) => handler(event.payload)),
 };
 
 // Sample data for doing UI work in a plain browser, where there is no invoke bridge.

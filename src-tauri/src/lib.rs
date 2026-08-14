@@ -1,6 +1,7 @@
 mod bookmarklet;
 mod commands;
 mod credentials;
+mod jobs;
 mod launcher;
 mod migrate;
 mod services;
@@ -8,14 +9,13 @@ mod services;
 // models, store and installed live in ugly-core, shared with the MCP server.
 use ugly_core::store;
 
-use std::sync::atomic::AtomicBool;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use tauri::Manager;
 
 use commands::AppState;
 use credentials::Secret;
-use ugly_core::models::EnrichmentJob;
+use jobs::JobSlot;
 use ugly_core::store::Store;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -79,8 +79,8 @@ pub fn run() {
 
             app.manage(AppState {
                 store,
-                job: Mutex::new(EnrichmentJob::default()),
-                job_running: AtomicBool::new(false),
+                igdb_job: Arc::new(JobSlot::new("enrichment-progress")),
+                steam_job: Arc::new(JobSlot::new("steam-progress")),
             });
 
             Ok(())
@@ -97,6 +97,7 @@ pub fn run() {
             commands::get_metadata,
             commands::get_enrichment_job,
             commands::enrich_metadata,
+            commands::enrich_steam_tags,
             commands::get_statuses,
             commands::set_game_status,
             commands::get_installed,

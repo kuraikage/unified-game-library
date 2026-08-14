@@ -5,6 +5,7 @@ use anyhow::{bail, Result};
 use serde::Deserialize;
 
 use ugly_core::models::MetadataEntry;
+use ugly_core::store::Store;
 
 const TOKEN_URL: &str = "https://id.twitch.tv/oauth2/token";
 const GAMES_URL: &str = "https://api.igdb.com/v4/games";
@@ -103,14 +104,82 @@ fn escape_query(title: &str) -> String {
     title.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Why a lookup failed, split by whether retrying the *next* title is worth it.
+#[derive(Debug)]
+pub enum LookupError {
+    /// Credentials are wrong. Every remaining title will fail the same way.
+    Auth(String),
+    RateLimited,
+    Transient(String),
+}
+
+impl std::fmt::Display for LookupError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            LookupError::Auth(message) => write!(f, "{message}"),
+            LookupError::RateLimited => write!(f, "IGDB rate limit reached"),
+            LookupError::Transient(message) => write!(f, "{message}"),
+        }
+    }
+}
+
+impl LookupError {
+    /// How long to wait before the next title after this failure.
+    pub fn backoff(&self) -> std::time::Duration {
+        match self {
+            LookupError::RateLimited => std::time::Duration::from_secs(2),
+            _ => std::time::Duration::from_millis(300),
+        }
+    }
+}
+
+/// Bumped whenever the shape of what we store from IGDB changes, so existing rows get
+/// re-fetched. Raising the keyword cap changed it, hence version 2.
+pub const TAG_SCHEMA_VERSION: i64 = 2;
+
+const VERSION_KEY: &str = "igdb_tag_version";
+const REFRESH_FROM_KEY: &str = "igdb_refresh_from";
+
+/// Timestamp before which cached rows are considered stale, or 0 when everything is current.
+///
+/// Stored rather than recomputed so an interrupted pass resumes: each refreshed row's
+/// `fetched_at` moves past the marker, so only the remainder is still pending next launch.
+pub fn refresh_marker(store: &Store, now: i64) -> anyhow::Result<i64> {
+    let applied = store
+        .get_state(VERSION_KEY)?
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0);
+
+    if applied >= TAG_SCHEMA_VERSION {
+        return Ok(0);
+    }
+    if let Some(existing) = store.get_state(REFRESH_FROM_KEY)?.and_then(|v| v.parse().ok()) {
+        return Ok(existing);
+    }
+    store.set_state(REFRESH_FROM_KEY, &now.to_string())?;
+    Ok(now)
+}
+
+/// Records that every row now matches the current schema.
+pub fn finish_refresh(store: &Store) -> anyhow::Result<()> {
+    store.set_state(VERSION_KEY, &TAG_SCHEMA_VERSION.to_string())?;
+    clear_refresh_marker(store)
+}
+
+pub fn clear_refresh_marker(store: &Store) -> anyhow::Result<()> {
+    store.set_state(REFRESH_FROM_KEY, "0")
+}
+
 /// Looks a title up on IGDB. `Ok(None)` means "searched, no match" — the caller records
 /// that so we don't retry it on every launch.
 pub async fn lookup_game(
     client_id: &str,
     client_secret: &str,
     title: &str,
-) -> Result<Option<MetadataEntry>> {
-    let token = access_token(client_id, client_secret).await?;
+) -> Result<Option<MetadataEntry>, LookupError> {
+    let token = access_token(client_id, client_secret)
+        .await
+        .map_err(|err| LookupError::Auth(err.to_string()))?;
     let body = format!(
         "search \"{}\"; fields name,genres.name,themes.name,keywords.name,cover.image_id; limit 1;",
         escape_query(title)
@@ -124,21 +193,33 @@ pub async fn lookup_game(
         .header("Content-Type", "text/plain")
         .body(body)
         .send()
-        .await?;
+        .await
+        .map_err(|err| LookupError::Transient(err.to_string()))?;
 
-    if !response.status().is_success() {
-        bail!("IGDB request failed: {}", response.status());
+    let status = response.status();
+    if !status.is_success() {
+        return Err(match status.as_u16() {
+            401 | 403 => LookupError::Auth(format!(
+                "IGDB rejected the credentials ({status}) — check the Client ID and Secret."
+            )),
+            429 => LookupError::RateLimited,
+            _ => LookupError::Transient(format!("IGDB request failed: {status}")),
+        });
     }
 
-    let results: Vec<IgdbGame> = response.json().await?;
+    let results: Vec<IgdbGame> = response
+        .json()
+        .await
+        .map_err(|err| LookupError::Transient(err.to_string()))?;
     let Some(game) = results.into_iter().next() else {
         return Ok(None);
     };
 
-    // Themes are broad ("Horror"), keywords are specific ("roguelike") — both are useful
-    // to search on, but keywords get capped so a handful of games don't dominate the column.
+    // Themes are broad ("Horror"), keywords are specific ("roguelike"). IGDB returns
+    // keywords unordered, so the cap is generous and the merge with Steam's weighted tags
+    // does the real filtering — see crates/core/src/metadata.rs.
     let mut tags: Vec<String> = game.themes.into_iter().map(|t| t.name).collect();
-    tags.extend(game.keywords.into_iter().take(5).map(|k| k.name));
+    tags.extend(game.keywords.into_iter().take(20).map(|k| k.name));
 
     Ok(Some(MetadataEntry {
         matched_name: game.name,

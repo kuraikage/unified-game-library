@@ -102,6 +102,10 @@ pub struct LibraryGameView {
     pub shared: bool,
     pub genres: Vec<String>,
     pub tags: Vec<String>,
+    /// Percentage of Steam reviews that are positive. Absent for games with no Steam page.
+    pub review_percent: Option<i64>,
+    /// Release year, from Steam.
+    pub released: Option<i64>,
 }
 
 impl From<&LibraryGame> for LibraryGameView {
@@ -120,8 +124,54 @@ impl From<&LibraryGame> for LibraryGameView {
             shared: g.shared,
             genres: g.genres.clone(),
             tags: g.tags.clone(),
+            review_percent: g.review_percent,
+            // A year is all anyone reasons with here, and it costs a fraction of a
+            // timestamp across hundreds of rows.
+            released: g.released_at.map(release_year),
         }
     }
+}
+
+/// Unix seconds to a calendar year, without pulling in a date library for one field.
+fn release_year(seconds: i64) -> i64 {
+    // Days since the epoch, converted with the civil-from-days algorithm so leap years
+    // and centuries are handled exactly.
+    let days = seconds.div_euclid(86_400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let year = yoe + era * 400;
+    if mp >= 10 {
+        year + 1
+    } else {
+        year
+    }
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AllGamesResult {
+    pub total: usize,
+    pub games: Vec<CompactGame>,
+}
+
+/// Title, store and play state — nothing else. The whole library fits in one response at
+/// this size, which is the point: it lets a caller reason over everything it owns instead
+/// of trusting a tag filter to be complete.
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CompactGame {
+    pub title: String,
+    pub platform: String,
+    /// Omitted for backlog games, which are most of them — `Option` fields aren't marked
+    /// required by the schema derive, so skipping this one is safe where skipping a plain
+    /// `bool` would not be. The compact-listing schema test guards that.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+    pub installed: bool,
 }
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
@@ -137,11 +187,17 @@ pub struct StatsResult {
     pub dropped: usize,
     /// Everything with no play state set — the implicit backlog.
     pub backlog: usize,
-    /// Games with no cached IGDB lookup, so no genres or tags to filter on.
+    /// Games neither source knows anything about — no genres and no tags at all, so
+    /// nothing to filter them by.
     pub missing_metadata: usize,
+    /// Games with no genres. Genres come only from IGDB, so this is the count that has
+    /// never been matched there, even if Steam supplied tags for it.
+    pub missing_genres: usize,
     pub total_playtime_hours: f64,
     /// Most common genres across the library, largest first.
     pub top_genres: Vec<Facet>,
+    /// Most common tags. These are the exact strings `list_games`'s `tag` filter matches,
+    /// so pick from here rather than guessing at wording.
     pub top_tags: Vec<Facet>,
 }
 
@@ -186,6 +242,67 @@ fn parse_status_filter(value: &str) -> Result<Option<GameStatus>, ErrorData> {
 
 fn contains_ignore_case(haystack: &[String], needle: &str) -> bool {
     haystack.iter().any(|v| v.eq_ignore_ascii_case(needle))
+}
+
+/// Applies every filter in [`ListGamesArgs`], combining them with AND.
+///
+/// Shared by `list_games` and `list_all_games` so the two can never disagree about what
+/// matches — they differ only in how much of each game they return.
+fn select<'a>(
+    games: &'a [LibraryGame],
+    args: &ListGamesArgs,
+) -> Result<Vec<&'a LibraryGame>, ErrorData> {
+    let status_filter = args.status.as_deref().map(parse_status_filter).transpose()?;
+    let platform = args.platform.as_deref().map(str::to_lowercase);
+    if let Some(p) = platform.as_deref() {
+        if p != "steam" && p != "epic" {
+            return Err(invalid(format!(
+                "Unknown platform '{p}'. Use 'steam' or 'epic'."
+            )));
+        }
+    }
+    let installed_only = args.installed_only.unwrap_or(false);
+    let search = args.search.as_deref().map(str::to_lowercase);
+
+    Ok(games
+        .iter()
+        .filter(|g| {
+            if let Some(p) = platform.as_deref() {
+                if g.platform != p {
+                    return false;
+                }
+            }
+            // `Some(None)` is an explicit request for the backlog, so compare the inner
+            // value rather than treating a missing status as "no filter".
+            if let Some(want) = status_filter {
+                if g.status != want {
+                    return false;
+                }
+            }
+            if installed_only && !g.installed {
+                return false;
+            }
+            if let Some(genre) = args.genre.as_deref() {
+                if !contains_ignore_case(&g.genres, genre) {
+                    return false;
+                }
+            }
+            if let Some(tag) = args.tag.as_deref() {
+                if !contains_ignore_case(&g.tags, tag) {
+                    return false;
+                }
+            }
+            if let Some(term) = search.as_deref() {
+                let hit = g.title.to_lowercase().contains(term)
+                    || g.genres.iter().any(|v| v.to_lowercase().contains(term))
+                    || g.tags.iter().any(|v| v.to_lowercase().contains(term));
+                if !hit {
+                    return false;
+                }
+            }
+            true
+        })
+        .collect())
 }
 
 #[tool_router]
@@ -274,6 +391,7 @@ impl LibraryTools {
                 .iter()
                 .filter(|g| g.genres.is_empty() && g.tags.is_empty())
                 .count(),
+            missing_genres: games.iter().filter(|g| g.genres.is_empty()).count(),
             total_playtime_hours: (total_minutes as f64 / 6.0).round() / 10.0,
             top_genres: top(genres, 25),
             top_tags: top(tags, 25),
@@ -281,68 +399,20 @@ impl LibraryTools {
     }
 
     #[tool(
-        description = "Search and filter the library. Every filter is optional and they combine \
-                       with AND. Returns the total number of matches alongside one page of \
-                       results, so a broad search reports its size without dumping every row.",
+        description = "Search and filter the library, returning full detail per game. Every \
+                       filter is optional and they combine with AND. Reports the total number of \
+                       matches alongside one page of results.\n\n\
+                       Note the genre and tag filters only match what was recorded, and that \
+                       data is incomplete — a game missing a tag may still fit. For \"what is \
+                       this game like\" questions use list_all_games instead.",
         annotations(title = "List games", read_only_hint = true)
     )]
     fn list_games(
         &self,
         Parameters(args): Parameters<ListGamesArgs>,
     ) -> Result<Json<ListGamesResult>, ErrorData> {
-        let installed_only = args.installed_only.unwrap_or(false);
-        let games = self.library(installed_only)?;
-
-        let status_filter = args.status.as_deref().map(parse_status_filter).transpose()?;
-        let platform = args.platform.as_deref().map(str::to_lowercase);
-        if let Some(p) = platform.as_deref() {
-            if p != "steam" && p != "epic" {
-                return Err(invalid(format!(
-                    "Unknown platform '{p}'. Use 'steam' or 'epic'."
-                )));
-            }
-        }
-        let search = args.search.as_deref().map(str::to_lowercase);
-
-        let matches: Vec<&LibraryGame> = games
-            .iter()
-            .filter(|g| {
-                if let Some(p) = platform.as_deref() {
-                    if g.platform != p {
-                        return false;
-                    }
-                }
-                // `Some(None)` is an explicit request for the backlog, so compare the
-                // inner value rather than treating a missing status as "no filter".
-                if let Some(want) = status_filter {
-                    if g.status != want {
-                        return false;
-                    }
-                }
-                if installed_only && !g.installed {
-                    return false;
-                }
-                if let Some(genre) = args.genre.as_deref() {
-                    if !contains_ignore_case(&g.genres, genre) {
-                        return false;
-                    }
-                }
-                if let Some(tag) = args.tag.as_deref() {
-                    if !contains_ignore_case(&g.tags, tag) {
-                        return false;
-                    }
-                }
-                if let Some(term) = search.as_deref() {
-                    let hit = g.title.to_lowercase().contains(term)
-                        || g.genres.iter().any(|v| v.to_lowercase().contains(term))
-                        || g.tags.iter().any(|v| v.to_lowercase().contains(term));
-                    if !hit {
-                        return false;
-                    }
-                }
-                true
-            })
-            .collect();
+        let games = self.library(args.installed_only.unwrap_or(false))?;
+        let matches = select(&games, &args)?;
 
         let offset = args.offset.unwrap_or(0);
         let limit = args.limit.unwrap_or(DEFAULT_LIMIT).min(MAX_LIMIT);
@@ -358,6 +428,38 @@ impl LibraryTools {
             returned: page.len(),
             offset,
             games: page,
+        }))
+    }
+
+    #[tool(
+        description = "Every matching game as just a title, store, play state and whether it is \
+                       installed — no genres or tags, and no limit. Unfiltered this is the whole \
+                       library in one response.\n\n\
+                       Use this for questions about what a game IS rather than how it is tagged \
+                       — \"which of these are soulslikes?\", \"anything cosy here?\". Tags are \
+                       incomplete, so filtering by them silently drops games that qualify; \
+                       reading the titles and applying what you already know about these games \
+                       does not.",
+        annotations(title = "List every game", read_only_hint = true)
+    )]
+    fn list_all_games(
+        &self,
+        Parameters(args): Parameters<ListGamesArgs>,
+    ) -> Result<Json<AllGamesResult>, ErrorData> {
+        let games = self.library(args.installed_only.unwrap_or(false))?;
+        let matches = select(&games, &args)?;
+
+        Ok(Json(AllGamesResult {
+            total: matches.len(),
+            games: matches
+                .into_iter()
+                .map(|g| CompactGame {
+                    title: g.title.clone(),
+                    platform: g.platform.clone(),
+                    status: g.status.map(|s| s.as_str().to_string()),
+                    installed: g.installed,
+                })
+                .collect(),
         }))
     }
 
@@ -420,6 +522,41 @@ impl LibraryTools {
     }
 }
 
+#[tool_handler]
+impl ServerHandler for LibraryTools {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(
+                rmcp::model::Implementation::new("ugly", env!("CARGO_PKG_VERSION"))
+                    .with_title("UGLy — Unified Game Library"),
+            )
+            .with_instructions(
+                "Read-access to the user's own Steam and Epic game library, as collected by the \
+                 UGLy desktop app, plus the ability to change a game's play status.\n\n\
+                 Call get_library_stats first: it reports the size and shape of the library and \
+                 the genres and tags actually present. Its topTags list is the exact vocabulary \
+                 the tag filter matches, so choose from it rather than guessing at wording.\n\n\
+                 TAGS ARE INCOMPLETE. They are Steam user tags where a game has a Steam page, \
+                 topped up with IGDB keywords, capped per game, and absent entirely for a game \
+                 neither source matched. A game not carrying a tag is NOT evidence it doesn't \
+                 qualify — Dark Souls III carried no 'soulslike' tag at all until recently. \
+                 So a tag filter returning few results means the tagging is thin, not that the \
+                 library is. Never present a tag-filtered list as complete.\n\n\
+                 For questions about what a game IS rather than how it happens to be labelled — \
+                 'what soulslike should I play', 'something cosy', 'a short one' — prefer \
+                 list_all_games and apply what you already know about the titles you see. It \
+                 returns the entire library cheaply and is the only approach that doesn't \
+                 inherit the gaps in the tag data. Use list_games when you want detail, or when \
+                 a filter is genuinely reliable (platform, play status, installed).\n\n\
+                 Games with no play status are the backlog, which is usually what to recommend \
+                 from. 'installed' means it is ready to play right now on this PC. reviewPercent \
+                 is the share of Steam reviews that are positive; genres come only from IGDB.\n\n\
+                 Games cannot be launched or installed from here; tell the user to press play in \
+                 the app.",
+            )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -475,6 +612,39 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_compact_listing_still_matches_its_schema() {
+        assert_required_fields_present(
+            schemars::schema_for!(AllGamesResult),
+            serde_json::to_value(AllGamesResult {
+                total: 0,
+                games: Vec::new(),
+            })
+            .unwrap(),
+        );
+        assert_required_fields_present(
+            schemars::schema_for!(CompactGame),
+            serde_json::to_value(CompactGame {
+                title: "A Game".into(),
+                platform: "steam".into(),
+                status: None,
+                installed: false,
+            })
+            .unwrap(),
+        );
+    }
+
+    #[test]
+    fn release_years_are_converted_exactly() {
+        // Steam's own steam_release_date for Lies of P, and the epoch boundaries either
+        // side of a new year in UTC.
+        assert_eq!(release_year(1_695_048_142), 2023);
+        assert_eq!(release_year(0), 1970);
+        assert_eq!(release_year(1_704_067_199), 2023); // 2023-12-31T23:59:59Z
+        assert_eq!(release_year(1_704_067_200), 2024); // 2024-01-01T00:00:00Z
+        assert_eq!(release_year(951_782_400), 2000); // leap day 2000-02-29
+    }
+
+    #[test]
     fn an_empty_result_page_still_matches_its_schema() {
         assert_required_fields_present(
             schemars::schema_for!(ListGamesResult),
@@ -494,29 +664,5 @@ mod tests {
         assert_eq!(parse_status_filter("  Completed ").unwrap(), Some(GameStatus::Completed));
         assert_eq!(parse_status_filter("backlog").unwrap(), None);
         assert!(parse_status_filter("banana").is_err());
-    }
-}
-
-#[tool_handler]
-impl ServerHandler for LibraryTools {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(
-                rmcp::model::Implementation::new("ugly", env!("CARGO_PKG_VERSION"))
-                    .with_title("UGLy — Unified Game Library"),
-            )
-            .with_instructions(
-                "Read-access to the user's own Steam and Epic game library, as collected by the \
-                 UGLy desktop app, plus the ability to change a game's play status.\n\n\
-                 Call get_library_stats first: it reports the size and shape of the library and \
-                 the genres and tags actually present, which are the values list_games filters \
-                 on. Use list_games for everything else — it returns a total match count, so \
-                 prefer narrowing filters over paging through hundreds of rows.\n\n\
-                 Games with no play status are the backlog, which is usually what to recommend \
-                 from. 'installed' means it is ready to play right now on this PC. Genres and \
-                 tags come from IGDB and are missing for games that were never enriched.\n\n\
-                 Games cannot be launched or installed from here; tell the user to press play in \
-                 the app.",
-            )
     }
 }

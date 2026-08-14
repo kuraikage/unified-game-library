@@ -42,6 +42,7 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [notice, setNotice] = useState(null);
   const enrichRequested = useRef(false);
+  const steamTagsRequested = useRef(false);
 
   const loadAll = useCallback(async () => {
     setError(null);
@@ -92,6 +93,17 @@ export default function App() {
       if (!job.running) api.getMetadata().then(setMetadata).catch(() => {});
     }).then((fn) => unlisten.push(fn));
 
+    // The Steam pass gets no progress bar — it's seconds, not minutes — so this only
+    // picks up the tags once it's finished.
+    api.onSteamProgress((job) => {
+      if (job.running) return;
+      if (job.error) {
+        console.warn('Steam tag lookup failed:', job.error);
+        return;
+      }
+      api.getMetadata().then(setMetadata).catch(() => {});
+    }).then((fn) => unlisten.push(fn));
+
     api.onEpicImported(() => {
       loadAll();
       setView('library');
@@ -115,27 +127,33 @@ export default function App() {
     return [...steamGames, ...shared, ...epicGames];
   }, [steamGames, familyGames, epicGames]);
 
-  // Any game with no cached IGDB lookup gets fetched automatically. Rust filters to just
-  // the missing ones, so passing the whole list is cheap.
+  // Asked for once per session; Rust decides what actually needs fetching and returns
+  // immediately when nothing does.
   //
-  // Note this tests `.igdb` and not merely that an entry exists. Metadata now merges two
-  // sources, so a Steam game carries tags before IGDB has ever seen it — testing for
-  // presence would mark it done and it would silently never get genres or cover art.
+  // Deliberately NOT gated on "does anything look missing from here?". Rust also re-fetches
+  // rows whose cached shape predates the current tag schema, and those rows look present
+  // from this side — gating on appearance would mean such a pass could never start.
   useEffect(() => {
-    if (loading || !settings.igdbConfigured || metadataJob.running || allGames.length === 0) return;
-    const missing = allGames.filter((g) => !metadata[slugify(g.title)]?.igdb);
-    if (missing.length === 0) {
-      enrichRequested.current = false;
-      return;
-    }
+    if (loading || !settings.igdbConfigured || allGames.length === 0) return;
     if (enrichRequested.current) return;
     enrichRequested.current = true;
 
     api
-      .enrichMetadata(allGames.map((g) => g.title))
+      .enrichMetadata()
       .then(setMetadataJob)
       .catch((err) => setError(String(err)));
-  }, [loading, settings.igdbConfigured, metadataJob.running, allGames, metadata]);
+  }, [loading, settings.igdbConfigured, allGames.length]);
+
+  // Steam tags are a handful of batched requests for the whole library, so they're
+  // fetched on load with no progress UI. They need no credentials, which is why this
+  // isn't gated on settings the way the IGDB pass is.
+  useEffect(() => {
+    if (loading || allGames.length === 0 || steamTagsRequested.current) return;
+    steamTagsRequested.current = true;
+
+    // Returns as soon as the pass starts; the result arrives on the steam-progress event.
+    api.enrichSteamTags().catch((err) => console.warn('Steam tag lookup failed:', err));
+  }, [loading, allGames.length]);
 
   async function handleRefreshSteam() {
     setRefreshing(true);
@@ -159,7 +177,7 @@ export default function App() {
     setError(null);
     enrichRequested.current = false;
     try {
-      setMetadataJob(await api.enrichMetadata(allGames.map((g) => g.title)));
+      setMetadataJob(await api.enrichMetadata());
     } catch (err) {
       setError(String(err));
     }
